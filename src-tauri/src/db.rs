@@ -302,21 +302,52 @@ pub async fn db_get_provider(pool: &SqlitePool, id: &str) -> sqlx::Result<Option
 pub async fn db_list_content(
     pool: &SqlitePool,
     search: Option<&str>,
+    media_type: Option<&str>,
+    limit: Option<i64>,
+    offset: Option<i64>,
 ) -> sqlx::Result<Vec<Content>> {
-    match search {
-        Some(q) => {
+    let lim = limit.unwrap_or(500);
+    let off = offset.unwrap_or(0);
+    match (search, media_type) {
+        (Some(q), Some(mt)) => {
             let like = format!("%{}%", q);
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content WHERE title LIKE ?1 ORDER BY title ASC LIMIT 500"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content WHERE title LIKE ?1 AND media_type = ?2 ORDER BY title ASC LIMIT ?3 OFFSET ?4"
             )
             .bind(like)
+            .bind(mt)
+            .bind(lim)
+            .bind(off)
             .fetch_all(pool)
             .await
         }
-        None => {
+        (Some(q), None) => {
+            let like = format!("%{}%", q);
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content ORDER BY title ASC LIMIT 500"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content WHERE title LIKE ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
             )
+            .bind(like)
+            .bind(lim)
+            .bind(off)
+            .fetch_all(pool)
+            .await
+        }
+        (None, Some(mt)) => {
+            sqlx::query_as::<_, Content>(
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content WHERE media_type = ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
+            )
+            .bind(mt)
+            .bind(lim)
+            .bind(off)
+            .fetch_all(pool)
+            .await
+        }
+        (None, None) => {
+            sqlx::query_as::<_, Content>(
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content ORDER BY title ASC LIMIT ?1 OFFSET ?2"
+            )
+            .bind(lim)
+            .bind(off)
             .fetch_all(pool)
             .await
         }

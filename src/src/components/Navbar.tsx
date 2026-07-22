@@ -50,6 +50,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             Home
           </button>
           <button
+            className={`nav-link ${activeTab === 'movies' ? 'active' : ''}`}
+            onClick={() => setActiveTab('movies')}
+          >
+            Movies
+          </button>
+          <button
+            className={`nav-link ${activeTab === 'tv' ? 'active' : ''}`}
+            onClick={() => setActiveTab('tv')}
+          >
+            TV Shows
+          </button>
+          <button
             className={`nav-link ${activeTab === 'playlists' ? 'active' : ''}`}
             onClick={() => setActiveTab('playlists')}
           >

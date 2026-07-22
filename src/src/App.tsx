@@ -80,6 +80,14 @@ const DEMO_PLAYLISTS: Playlist[] = [
   { id: 'pl-2', name: 'Rust & Backend Tutorials' }
 ];
 
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
 async function callTauri<T>(command: string, args?: Record<string, unknown>): Promise<T | null> {
   try {
     if (typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)) {
@@ -103,10 +111,12 @@ export default function App() {
   const [isAddVideoOpen, setIsAddVideoOpen] = useState(false);
   const [isAddPlaylistOpen, setIsAddPlaylistOpen] = useState(false);
   const [selectedVideoModal, setSelectedVideoModal] = useState<Video | null>(null);
-  const [catalog, setCatalog] = useState<Content[]>([]);
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
 
-  // Refresh data from Tauri SQLite database or LocalStorage fallback
+  // Catalog state — loaded separately by media type
+  const [movies, setMovies] = useState<Content[]>([]);
+  const [tvShows, setTvShows] = useState<Content[]>([]);
+
   const refreshData = async () => {
     setLoading(true);
     const vList = await callTauri<Video[]>('list_videos');
@@ -126,10 +136,24 @@ export default function App() {
       setPlaylists(savedP ? JSON.parse(savedP) : DEMO_PLAYLISTS);
     }
 
-    const cList = await callTauri<Content[]>('list_content', {
-      search: searchQuery.trim() || null,
-    });
-    if (cList !== null) setCatalog(cList);
+    // Load movies and TV shows separately so each gets a full 500-item page
+    const [mList, tvList] = await Promise.all([
+      callTauri<Content[]>('list_content', {
+        search: searchQuery.trim() || null,
+        mediaType: 'movie',
+        limit: 500,
+        offset: 0,
+      }),
+      callTauri<Content[]>('list_content', {
+        search: searchQuery.trim() || null,
+        mediaType: 'tv_show',
+        limit: 500,
+        offset: 0,
+      }),
+    ]);
+
+    if (mList !== null) setMovies(mList);
+    if (tvList !== null) setTvShows(tvList);
 
     setLoading(false);
   };
@@ -148,7 +172,6 @@ export default function App() {
     localStorage.setItem('flud_netflix_playlists', JSON.stringify(newP));
   };
 
-  // Actions
   const handleAddVideo = async (title: string, pageUrl: string, coverUrl: string, tagsInput: string) => {
     const tagsArray = tagsInput
       .split(',')
@@ -224,7 +247,7 @@ export default function App() {
     const res = await callTauri<void>('open_video_player', {
       url: video.page_url,
       title: video.title,
-      providerId: null, // manual bookmarks have no provider
+      providerId: null,
     });
     if (res === null) {
       window.open(video.page_url, '_blank', 'noopener,noreferrer');
@@ -248,7 +271,6 @@ export default function App() {
     updateLocalPlaylists(DEMO_PLAYLISTS);
   };
 
-  // Search filtered videos
   const filteredVideos = useMemo(() => {
     if (!searchQuery.trim()) return videos;
     const q = searchQuery.toLowerCase();
@@ -260,22 +282,82 @@ export default function App() {
     );
   }, [videos, searchQuery]);
 
-  // Featured video for Hero Banner
   const heroVideo = useMemo(() => {
     if (filteredVideos.length === 0) return null;
     return filteredVideos[0];
   }, [filteredVideos]);
 
-  // Tags list
   const allTags = useMemo(() => {
     const set = new Set<string>();
     videos.forEach((v) => parseTags(v.tags).forEach((t) => set.add(t)));
     return Array.from(set);
   }, [videos]);
 
+  // Chunked carousels: 24 cards per row
+  const movieChunks = useMemo(() => chunkArray(movies, 24), [movies]);
+  const tvChunks = useMemo(() => chunkArray(tvShows, 24), [tvShows]);
+
+  // Catalog-based tabs render independently of the video empty-state gate
+  const isCatalogTab = activeTab === 'movies' || activeTab === 'tv' || activeTab === 'providers';
+
+  const renderCatalogTab = () => {
+    if (activeTab === 'movies') {
+      if (movieChunks.length === 0) {
+        return (
+          <div style={{ textAlign: 'center', padding: '5rem 2rem', color: 'var(--text-gray)' }}>
+            <Film size={48} color="var(--netflix-red)" style={{ margin: '0 auto 1rem' }} />
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.5rem' }}>No Movies Yet</h2>
+            <p>Run the import script to populate the catalog.</p>
+          </div>
+        );
+      }
+      return (
+        <>
+          {movieChunks.map((chunk, i) => (
+            <ContentRow
+              key={i}
+              title={i === 0 ? `Movies (${movies.length.toLocaleString()} titles)` : `Movies · Page ${i + 1}`}
+              items={chunk}
+              onOpenDetail={setSelectedContentId}
+            />
+          ))}
+        </>
+      );
+    }
+
+    if (activeTab === 'tv') {
+      if (tvChunks.length === 0) {
+        return (
+          <div style={{ textAlign: 'center', padding: '5rem 2rem', color: 'var(--text-gray)' }}>
+            <Film size={48} color="var(--netflix-red)" style={{ margin: '0 auto 1rem' }} />
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.5rem' }}>No TV Shows Yet</h2>
+            <p>Run the import script to populate the catalog.</p>
+          </div>
+        );
+      }
+      return (
+        <>
+          {tvChunks.map((chunk, i) => (
+            <ContentRow
+              key={i}
+              title={i === 0 ? `TV Shows (${tvShows.length.toLocaleString()} titles)` : `TV Shows · Page ${i + 1}`}
+              items={chunk}
+              onOpenDetail={setSelectedContentId}
+            />
+          ))}
+        </>
+      );
+    }
+
+    if (activeTab === 'providers') {
+      return <ProviderList />;
+    }
+
+    return null;
+  };
+
   return (
     <div className="flud-netflix-app">
-      {/* Navbar */}
       <Navbar
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -285,8 +367,7 @@ export default function App() {
         setActiveTab={setActiveTab}
       />
 
-      {/* Hero Banner */}
-      {!searchQuery && heroVideo && (
+      {!searchQuery && heroVideo && !isCatalogTab && (
         <HeroBanner
           video={heroVideo}
           onPlay={handlePlayWebview}
@@ -294,36 +375,57 @@ export default function App() {
         />
       )}
 
-      {/* Rows Wrapper */}
       <div className="rows-wrapper" style={{ marginTop: searchQuery ? '90px' : undefined }}>
         {loading ? (
           <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-gray)' }}>
-            Loading Netflix Video Shell...
+            Loading...
           </div>
+        ) : isCatalogTab ? (
+          renderCatalogTab()
         ) : filteredVideos.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '5rem 2rem' }}>
-            <Film size={48} color="var(--netflix-red)" style={{ margin: '0 auto 1rem' }} />
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-              No Bookmarks Found
-            </h2>
-            <p style={{ color: 'var(--text-gray)', marginBottom: '1.5rem' }}>
-              {searchQuery ? 'No bookmarks matched your search.' : 'Add your first video link to populate your Netflix shell.'}
-            </p>
-
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-              <button className="btn-netflix-primary" onClick={() => setIsAddVideoOpen(true)}>
-                <Plus size={18} />
-                <span>Add Video</span>
-              </button>
-              <button className="btn-netflix-secondary" onClick={handleSeedData}>
-                <Sparkles size={18} />
-                <span>Load Demo Data</span>
-              </button>
-            </div>
-          </div>
+          <>
+            {/* Empty video state — but still show catalog rows on home tab */}
+            {activeTab === 'home' && (movieChunks.length > 0 || tvChunks.length > 0) ? (
+              <>
+                {movieChunks.length > 0 && (
+                  <ContentRow
+                    title={`Movies (${movies.length.toLocaleString()} titles)`}
+                    items={movieChunks[0]}
+                    onOpenDetail={setSelectedContentId}
+                  />
+                )}
+                {tvChunks.length > 0 && (
+                  <ContentRow
+                    title={`TV Shows (${tvShows.length.toLocaleString()} titles)`}
+                    items={tvChunks[0]}
+                    onOpenDetail={setSelectedContentId}
+                  />
+                )}
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '5rem 2rem' }}>
+                <Film size={48} color="var(--netflix-red)" style={{ margin: '0 auto 1rem' }} />
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.5rem' }}>
+                  No Bookmarks Found
+                </h2>
+                <p style={{ color: 'var(--text-gray)', marginBottom: '1.5rem' }}>
+                  {searchQuery ? 'No bookmarks matched your search.' : 'Add your first video link to populate your Netflix shell.'}
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+                  <button className="btn-netflix-primary" onClick={() => setIsAddVideoOpen(true)}>
+                    <Plus size={18} />
+                    <span>Add Video</span>
+                  </button>
+                  <button className="btn-netflix-secondary" onClick={handleSeedData}>
+                    <Sparkles size={18} />
+                    <span>Load Demo Data</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <>
-            {/* Search Results — override tab filtering when query is active */}
             {searchQuery ? (
               <>
                 <MovieRow
@@ -333,7 +435,6 @@ export default function App() {
                   onOpenDetails={(v) => setSelectedVideoModal(v)}
                   onDeleteVideo={handleDeleteVideo}
                 />
-
                 {playlists.map((pl) => {
                   const plVideos = filteredVideos.filter((v) => v.playlist_id === pl.id);
                   if (plVideos.length === 0) return null;
@@ -348,7 +449,6 @@ export default function App() {
                     />
                   );
                 })}
-
                 {allTags.map((tag) => {
                   const tagVideos = filteredVideos.filter((v) => parseTags(v.tags).includes(tag));
                   if (tagVideos.length === 0) return null;
@@ -366,7 +466,6 @@ export default function App() {
               </>
             ) : activeTab === 'home' ? (
               <>
-                {/* Trending Row */}
                 <MovieRow
                   title="Trending & Recently Added"
                   videos={filteredVideos}
@@ -374,8 +473,6 @@ export default function App() {
                   onOpenDetails={(v) => setSelectedVideoModal(v)}
                   onDeleteVideo={handleDeleteVideo}
                 />
-
-                {/* Playlist Shelves */}
                 {playlists.map((pl) => {
                   const plVideos = videos.filter((v) => v.playlist_id === pl.id);
                   return (
@@ -389,8 +486,6 @@ export default function App() {
                     />
                   );
                 })}
-
-                {/* Tag Shelves */}
                 {allTags.map((tag) => {
                   const tagVideos = filteredVideos.filter((v) => parseTags(v.tags).includes(tag));
                   if (tagVideos.length === 0) return null;
@@ -405,28 +500,23 @@ export default function App() {
                     />
                   );
                 })}
-
-                {/* Catalog: Movies from all providers */}
-                {catalog.filter((c) => c.media_type === 'movie').length > 0 && (
+                {movieChunks.length > 0 && (
                   <ContentRow
-                    title="Catalog: Movies"
-                    items={catalog.filter((c) => c.media_type === 'movie')}
+                    title={`Catalog: Movies (${movies.length.toLocaleString()})`}
+                    items={movieChunks[0]}
                     onOpenDetail={setSelectedContentId}
                   />
                 )}
-
-                {/* Catalog: TV Shows from all providers */}
-                {catalog.filter((c) => c.media_type === 'tv_show').length > 0 && (
+                {tvChunks.length > 0 && (
                   <ContentRow
-                    title="Catalog: TV Shows"
-                    items={catalog.filter((c) => c.media_type === 'tv_show')}
+                    title={`Catalog: TV Shows (${tvShows.length.toLocaleString()})`}
+                    items={tvChunks[0]}
                     onOpenDetail={setSelectedContentId}
                   />
                 )}
               </>
             ) : activeTab === 'playlists' ? (
               <>
-                {/* Playlist Shelves only */}
                 {playlists.map((pl) => {
                   const plVideos = videos.filter((v) => v.playlist_id === pl.id);
                   return (
@@ -443,7 +533,6 @@ export default function App() {
               </>
             ) : activeTab === 'tags' ? (
               <>
-                {/* Tag Shelves only */}
                 {allTags.map((tag) => {
                   const tagVideos = videos.filter((v) => parseTags(v.tags).includes(tag));
                   if (tagVideos.length === 0) return null;
@@ -459,14 +548,11 @@ export default function App() {
                   );
                 })}
               </>
-            ) : activeTab === 'providers' ? (
-              <ProviderList />
             ) : null}
           </>
         )}
       </div>
 
-      {/* Movie Modal */}
       <MovieModal
         video={selectedVideoModal}
         playlists={playlists}
@@ -476,21 +562,18 @@ export default function App() {
         onSetPlaylist={handleSetVideoPlaylist}
       />
 
-      {/* Content Landing Modal — catalog titles */}
       <ContentLandingModal
         contentId={selectedContentId}
         onClose={() => setSelectedContentId(null)}
         onPlay={handlePlayContent}
       />
 
-      {/* Add Video Modal */}
       <AddVideoModal
         isOpen={isAddVideoOpen}
         onClose={() => setIsAddVideoOpen(false)}
         onAddVideo={handleAddVideo}
       />
 
-      {/* Add Playlist Modal */}
       <AddPlaylistModal
         isOpen={isAddPlaylistOpen}
         onClose={() => setIsAddPlaylistOpen(false)}
