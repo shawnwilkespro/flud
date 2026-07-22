@@ -40,6 +40,7 @@ pub struct Content {
     pub media_type: String, // "movie" | "tv_show"
     pub synopsis: Option<String>,
     pub poster_url: Option<String>,
+    pub cover_url_override: Option<String>,
     pub year: Option<i32>,
     pub genres: Option<String>, // JSON array string
     pub rating: Option<f64>,
@@ -132,6 +133,11 @@ pub async fn init_db() -> sqlx::Result<SqlitePool> {
     )
     .execute(&pool)
     .await?;
+
+    // Add cover_url_override column if it doesn't exist yet (idempotent migration)
+    let _ = sqlx::query("ALTER TABLE content ADD COLUMN cover_url_override TEXT")
+        .execute(&pool)
+        .await;
 
     sqlx::query(
         r#"
@@ -312,7 +318,7 @@ pub async fn db_list_content(
         (Some(q), Some(mt)) => {
             let like = format!("%{}%", q);
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content WHERE title LIKE ?1 AND media_type = ?2 ORDER BY title ASC LIMIT ?3 OFFSET ?4"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating FROM content WHERE title LIKE ?1 AND media_type = ?2 ORDER BY title ASC LIMIT ?3 OFFSET ?4"
             )
             .bind(like)
             .bind(mt)
@@ -324,7 +330,7 @@ pub async fn db_list_content(
         (Some(q), None) => {
             let like = format!("%{}%", q);
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content WHERE title LIKE ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating FROM content WHERE title LIKE ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
             )
             .bind(like)
             .bind(lim)
@@ -334,7 +340,7 @@ pub async fn db_list_content(
         }
         (None, Some(mt)) => {
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content WHERE media_type = ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating FROM content WHERE media_type = ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
             )
             .bind(mt)
             .bind(lim)
@@ -344,7 +350,7 @@ pub async fn db_list_content(
         }
         (None, None) => {
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content ORDER BY title ASC LIMIT ?1 OFFSET ?2"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating FROM content ORDER BY title ASC LIMIT ?1 OFFSET ?2"
             )
             .bind(lim)
             .bind(off)
@@ -359,7 +365,7 @@ pub async fn db_get_content_detail(
     content_id: &str,
 ) -> sqlx::Result<Option<ContentDetail>> {
     let content = sqlx::query_as::<_, Content>(
-        "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content WHERE id = ?1"
+        "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating FROM content WHERE id = ?1"
     )
     .bind(content_id)
     .fetch_optional(pool)
@@ -391,4 +397,26 @@ pub async fn db_get_content_detail(
     .collect();
 
     Ok(Some(ContentDetail { content, sources }))
+}
+
+pub async fn db_update_video_cover(pool: &SqlitePool, id: &str, cover_url: &str) -> sqlx::Result<()> {
+    sqlx::query("UPDATE videos SET cover_url = ?1 WHERE id = ?2")
+        .bind(cover_url)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn db_update_content_cover(
+    pool: &SqlitePool,
+    id: &str,
+    cover_url_override: Option<&str>,
+) -> sqlx::Result<()> {
+    sqlx::query("UPDATE content SET cover_url_override = ?1 WHERE id = ?2")
+        .bind(cover_url_override)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }

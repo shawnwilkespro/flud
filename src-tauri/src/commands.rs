@@ -10,6 +10,8 @@ use crate::db::{
     db_create_playlist,
     db_delete_playlist,
     db_set_video_playlist,
+    db_update_video_cover,
+    db_update_content_cover,
 };
 use crate::db;
 
@@ -78,6 +80,28 @@ pub async fn set_video_playlist(
     db_set_video_playlist(&state.db, &video_id, playlist_id.as_deref())
         .await
         .map_err(|e| format!("Set video playlist failed: {}", e))
+}
+
+#[tauri::command]
+pub async fn update_video_cover(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    cover_url: String,
+) -> Result<(), String> {
+    db_update_video_cover(&state.db, &id, &cover_url)
+        .await
+        .map_err(|e| format!("Update video cover failed: {}", e))
+}
+
+#[tauri::command]
+pub async fn update_content_cover(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    cover_url_override: Option<String>,
+) -> Result<(), String> {
+    db_update_content_cover(&state.db, &id, cover_url_override.as_deref())
+        .await
+        .map_err(|e| format!("Update content cover failed: {}", e))
 }
 
 #[tauri::command]

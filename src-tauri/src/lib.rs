@@ -46,6 +46,8 @@ pub fn run() {
             commands::list_providers,
             commands::list_content,
             commands::get_content_detail,
+            commands::update_video_cover,
+            commands::update_content_cover,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

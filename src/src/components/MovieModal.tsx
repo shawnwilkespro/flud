@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Play, ExternalLink, Trash2, Folder, Globe, Calendar } from 'lucide-react';
+import { X, Play, ExternalLink, Trash2, Folder, Globe, Calendar, Pencil } from 'lucide-react';
 import type { Video, Playlist } from '../App';
 import { parseTags } from '../utils';
 
@@ -10,6 +10,7 @@ interface MovieModalProps {
   onPlay: (video: Video) => void;
   onDelete: (id: string) => void;
   onSetPlaylist: (videoId: string, playlistId: string | null) => void;
+  onUpdateCover: (id: string, coverUrl: string) => Promise<void>;
 }
 
 export const MovieModal: React.FC<MovieModalProps> = ({
