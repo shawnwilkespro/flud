@@ -106,8 +106,8 @@ pub async fn init_db() -> sqlx::Result<SqlitePool> {
             id          TEXT PRIMARY KEY,
             name        TEXT NOT NULL,
             base_url    TEXT NOT NULL,
-            mask_left   INTEGER NOT NULL DEFAULT 210,
-            mask_right  INTEGER NOT NULL DEFAULT 210,
+            mask_left   INTEGER NOT NULL DEFAULT 0,
+            mask_right  INTEGER NOT NULL DEFAULT 0,
             mask_top    INTEGER NOT NULL DEFAULT 125,
             mask_bottom INTEGER NOT NULL DEFAULT 35,
             enabled     INTEGER NOT NULL DEFAULT 1
@@ -116,6 +116,14 @@ pub async fn init_db() -> sqlx::Result<SqlitePool> {
     )
     .execute(&pool)
     .await?;
+
+    // Fix existing records with old mask values (strip format: left=0, right=0)
+    sqlx::query("UPDATE providers SET mask_left = 0 WHERE mask_left = 210;")
+        .execute(&pool)
+        .await?;
+    sqlx::query("UPDATE providers SET mask_right = 0 WHERE mask_right = 210;")
+        .execute(&pool)
+        .await?;
 
     sqlx::query(
         r#"

@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS providers (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
     base_url    TEXT NOT NULL,
-    mask_left   INTEGER NOT NULL DEFAULT 210,
-    mask_right  INTEGER NOT NULL DEFAULT 210,
+    mask_left   INTEGER NOT NULL DEFAULT 0,
+    mask_right  INTEGER NOT NULL DEFAULT 0,
     mask_top    INTEGER NOT NULL DEFAULT 125,
     mask_bottom INTEGER NOT NULL DEFAULT 35,
     enabled     INTEGER NOT NULL DEFAULT 1

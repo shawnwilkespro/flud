@@ -132,11 +132,14 @@ pub async fn open_video_player(
     // Load provider mask settings; fall back to defaults if no provider_id given
     let (mask_left, mask_right, mask_top, mask_bottom) = if let Some(ref pid) = provider_id {
         match db::db_get_provider(&state.db, pid).await {
-            Ok(Some(p)) => (p.mask_left, p.mask_right, p.mask_top, p.mask_bottom),
-            _ => (210, 210, 125, 35),
+            Ok(Some(p)) => {
+                // Force left/right to 0 (horizontal strip format), keep top/bottom as is
+                (0, 0, p.mask_top, p.mask_bottom)
+            },
+            _ => (0, 0, 125, 35),
         }
     } else {
-        (210, 210, 125, 35)
+        (0, 0, 125, 35)
     };
 
     let hole_js = format!(
@@ -337,31 +340,68 @@ pub async fn open_video_player(
                 ].join('');
                 if (document.head) document.head.appendChild(_style);
 
-                var _monitorPlay = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polygon points="10,8 16,11.5 10,15" fill="#fff" stroke="#fff"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/></svg>';
-                var _searchIco  = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>';
-                var _folderIco  = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>';
-                var _plusIco    = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+                // FLUD logo from React Navbar component
+                var _fludLogo = '<svg width="36" height="36" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><g transform="translate(10, 10) rotate(15 32 32)"><path d="M13.5 31.5c0-2.6 2.4-4.7 5.3-4.7h.1c2.9 0 6.3 2.1 6.3 4.7L22.6 6.4c0-2.4 3-4.4 6.9-4.4h.1c3.8 0 6.9 2 6.9 4.4L35.3 31c0-2.6 2.4-4.7 5.3-4.7h.1c2.9 0 5.3 2.1 5.3 4.7v2.7c.5-1.9 2.4-3.2 4.6-2.7c4.5 1.2 3.6 4.8 4.1 8.7c.5 4.8 1.7 7.9 1.3 9.6c-1 3.7-3.7 3.2-5.1 4.2c-1.4 1-1.8 2.6-2.9 3.6c-2.2 2-6.2 1.6-9.8 2.5c-3.1.8-5.9 2.6-8.3 2.3c-2.7-.3-3.4-2.6-6.4-4c-3-1.4-7.1-.7-8.3-3.1c-2.3-4.8-1.7-23.3-1.7-23.3" fill="#4169E1"/><g fill="#9D00FF"><path d="M13.5 31.5c0-1.4.7-2.7 1.8-3.5c-1.9 2.4-.6 19.4 1.7 24.2c1.2 2.4 5.3 1.7 8.3 3.1c3 1.4 3.7 3.8 6.4 4c2.4.3 5.2-1.4 8.3-2.1c3.6-.9 6.1-.6 8.3-2.6c1.1-1 1.6-2.5 3.8-3.2c1.6-.5 2.7-1 3.9-2.2v.1c-1 3.7-3.7 3.2-5.1 4.2c-1.4 1-1.8 2.6-2.9 3.6c-2.2 2-6.2 1.6-9.8 2.5c-3.1.8-5.9 2.6-8.3 2.3c-2.7-.3-3.4-2.6-6.4-4c-3-1.4-7.1-.7-8.3-3.1c-2.3-4.8-1.7-23.3-1.7-23.3"/><path d="M22.6 5.3c-.9 3.8 2.5 38.4 2.5 38.4c0 2.5 1.3 1.5 1.3-1c0 0-3.6-32.5-2.6-37.3c.4-2 1.8-2.6 4.2-3.3c0 0-4.6.2-5.4 3.2"/><path d="M37 42.3v-13c0-.7.1-1.4.5-2c-1.3.9-2.1 2.2-2.1 3.7v13c-.1 2.7 1.6.9 1.6-1.7"/><path d="M47.4 43.6V33.2c0-.6.1-1.2.4-1.8c-1.1.8-1.9 2-1.9 3.4v10.4c0 2.3 1.5.7 1.5-1.6"/><path d="M34.4 10.8c.8-5.3-1.7-5.5-4.8-5.5c-3.1 0-5.6.2-4.8 5.5c.3 2 2.4 2.7 4.8 2.7s4.5-.8 4.8-2.7"/></g><path d="M34.5 9.9c.8-5.7-1.7-5.9-4.9-5.9s-5.7.2-4.9 5.8c.3 2.1 2.4 2.8 4.9 2.8c2.5 0 4.6-.7 4.9-2.7" fill="#ffffff"/><path d="M15.2 53.6c-3.6-4.2-8.3-6.4-7.1-9.5c1-3 3.1-2.9 5.8-6.3l1.3 15.8" fill="#9D00FF"/></g></svg>';
+                var _searchIco  = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>';
+                var _folderIco  = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>';
+                var _plusIco    = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
 
                 var nav = document.createElement('div');
                 nav.id = '__flud_nav__';
-                nav.style.cssText = 'position:fixed;top:0;left:0;right:0;height:125px;z-index:2147483648;display:flex;align-items:center;padding:0 28px;pointer-events:all;box-sizing:border-box;gap:8px;';
+                nav.style.cssText = 'position:fixed;top:0;left:0;right:0;height:125px;z-index:2147483648;display:flex;align-items:center;justify-content:space-between;padding:0 28px;pointer-events:all;box-sizing:border-box;opacity:1;transition:opacity 0.3s ease;background:linear-gradient(180deg,rgba(0,0,0,0.8) 0%,rgba(0,0,0,0) 100%);';
                 nav.innerHTML =
-                    '<div class="__fn_brand" id="__flud_n_brand">' + _monitorPlay +
-                    '<span style="font-family:system-ui,-apple-system,sans-serif;font-size:1.1rem;font-weight:800;color:#fff;letter-spacing:0.12em;">FLUD</span></div>' +
-                    '<div style="display:flex;align-items:center;gap:2px;margin-left:16px;">' +
-                        '<button class="__fn_link" id="__flud_n_home">Home</button>' +
-                        '<button class="__fn_link" id="__flud_n_playlists">Playlists</button>' +
-                        '<button class="__fn_link" id="__flud_n_tags">Tags &amp; Topics</button>' +
+                    '<div class="__fn_brand" id="__flud_n_brand" style="display:flex;align-items:center;gap:10px;cursor:pointer;flex-shrink:0;">' + _fludLogo +
+                    '<span style="font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:1.35rem;font-weight:900;letter-spacing:-0.03em;color:#fff;">FLUD</span></div>' +
+                    '<div style="display:flex;align-items:center;gap:20px;flex:1;margin-left:40px;">' +
+                        '<button class="__fn_link" id="__flud_n_home" style="background:none;border:none;color:#e5e5e5;font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:0.875rem;font-weight:500;cursor:pointer;transition:color 0.2s;padding:6px 0;">Home</button>' +
+                        '<button class="__fn_link" id="__flud_n_movies" style="background:none;border:none;color:#e5e5e5;font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:0.875rem;font-weight:500;cursor:pointer;transition:color 0.2s;padding:6px 0;">Movies</button>' +
+                        '<button class="__fn_link" id="__flud_n_tv" style="background:none;border:none;color:#e5e5e5;font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:0.875rem;font-weight:500;cursor:pointer;transition:color 0.2s;padding:6px 0;">TV Shows</button>' +
+                        '<button class="__fn_link" id="__flud_n_playlists" style="background:none;border:none;color:#e5e5e5;font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:0.875rem;font-weight:500;cursor:pointer;transition:color 0.2s;padding:6px 0;">Playlists</button>' +
+                        '<button class="__fn_link" id="__flud_n_tags" style="background:none;border:none;color:#e5e5e5;font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:0.875rem;font-weight:500;cursor:pointer;transition:color 0.2s;padding:6px 0;">Tags &amp; Topics</button>' +
+                        '<button class="__fn_link" id="__flud_n_providers" style="background:none;border:none;color:#e5e5e5;font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:0.875rem;font-weight:500;cursor:pointer;transition:color 0.2s;padding:6px 0;">Providers</button>' +
                     '</div>' +
-                    '<div style="flex:1;"></div>' +
-                    '<div style="display:flex;align-items:center;gap:10px;">' +
-                        '<div class="__fn_search" id="__flud_n_search">' + _searchIco +
-                        '<span style="color:rgba(255,255,255,0.4);font-family:system-ui,-apple-system,sans-serif;font-size:0.8rem;">Titles, tags, URLs...</span></div>' +
-                        '<button class="__fn_btn_sec" id="__flud_n_shelf">' + _folderIco + '<span>New Shelf</span></button>' +
-                        '<button class="__fn_btn_pri" id="__flud_n_addvideo">' + _plusIco + '<span>Add Video</span></button>' +
+                    '<div style="display:flex;align-items:center;gap:12px;">' +
+                        '<div class="__fn_search" id="__flud_n_search" style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.2);border-radius:4px;padding:6px 12px;cursor:pointer;">' + _searchIco +
+                        '<span style="color:rgba(255,255,255,0.4);font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:0.85rem;">Titles, tags, URLs...</span></div>' +
+                        '<button class="__fn_btn_sec" id="__flud_n_shelf" style="display:inline-flex;align-items:center;gap:8px;background:rgba(109,109,110,0.5);border:none;color:#fff;font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:0.875rem;font-weight:600;padding:7px 14px;border-radius:4px;cursor:pointer;transition:background 0.2s;">' + _folderIco + '<span>New Shelf</span></button>' +
+                        '<button class="__fn_btn_pri" id="__flud_n_addvideo" style="display:inline-flex;align-items:center;gap:8px;background:#E50914;border:none;color:#fff;font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:0.875rem;font-weight:700;padding:7px 16px;border-radius:4px;cursor:pointer;transition:background 0.2s;">' + _plusIco + '<span>Add Video</span></button>' +
                     '</div>';
 
                 document.documentElement.appendChild(nav);
+
+                // Navbar hover effect: show when mouse is near top, hide when away
+                // Only applies when navbar is visible (display: 'flex')
+                var _navHoverTimeout;
+                function _showNav() {
+                    clearTimeout(_navHoverTimeout);
+                    if (nav.style.display !== 'none') {
+                        nav.style.opacity = '1';
+                        nav.style.pointerEvents = 'all';
+                    }
+                }
+                function _hideNav() {
+                    if (nav.style.display !== 'none') {
+                        _navHoverTimeout = setTimeout(function() {
+                            nav.style.opacity = '0';
+                            nav.style.pointerEvents = 'none';
+                        }, 1500);
+                    }
+                }
+                document.addEventListener('mousemove', function(e) {
+                    if (nav.style.display !== 'none') {
+                        if (e.clientY < 200) {
+                            _showNav();
+                        } else {
+                            _hideNav();
+                        }
+                    }
+                });
+                document.addEventListener('mouseleave', function() {
+                    if (nav.style.display !== 'none') {
+                        _hideNav();
+                    }
+                });
+                _showNav();
 
                 function _doClose() {
                     try {
@@ -370,7 +410,7 @@ pub async fn open_video_player(
                         }
                     } catch(e) {}
                 }
-                ['__flud_n_brand','__flud_n_home','__flud_n_playlists','__flud_n_tags',
+                ['__flud_n_brand','__flud_n_home','__flud_n_movies','__flud_n_tv','__flud_n_playlists','__flud_n_tags','__flud_n_providers',
                  '__flud_n_search','__flud_n_shelf','__flud_n_addvideo'].forEach(function(id) {
                     var el = document.getElementById(id);
                     if (el) el.addEventListener('click', _doClose);
