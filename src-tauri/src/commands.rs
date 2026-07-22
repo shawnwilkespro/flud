@@ -351,14 +351,65 @@ pub async fn open_video_player(
                 });
             }
 
-            // Auto-hide overlay + navbar after 15 seconds — gives user time to orient,
-            // then clears the screen so the video has no distractions.
-            setTimeout(function() {
+            // Hide overlay + navbar on play/fullscreen; restore on pause/end/exit.
+            function _hideFludUI() {
                 var nav     = document.getElementById('__flud_nav__');
                 var overlay = document.getElementById('__flud_overlay__');
                 if (nav)     nav.style.display     = 'none';
                 if (overlay) overlay.style.display = 'none';
-            }, 15000);
+            }
+            function _showFludUI() {
+                var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                if (isFS) return;
+                var nav     = document.getElementById('__flud_nav__');
+                var overlay = document.getElementById('__flud_overlay__');
+                if (nav)     nav.style.display     = 'flex';
+                if (overlay) overlay.style.display = '';
+            }
+
+            // Signal 1: capture-phase media events (catches non-bubbling video events).
+            document.addEventListener('play',  function(e) {
+                if (e.target && e.target.tagName === 'VIDEO') { _hideFludUI(); }
+            }, true);
+            document.addEventListener('pause', function(e) {
+                if (e.target && e.target.tagName === 'VIDEO') { _showFludUI(); }
+            }, true);
+            document.addEventListener('ended', function(e) {
+                if (e.target && e.target.tagName === 'VIDEO') { _showFludUI(); }
+            }, true);
+
+            // Signal 2: native Fullscreen API changes (F key, native fullscreen button).
+            document.addEventListener('fullscreenchange', function() {
+                var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                if (isFS) { _hideFludUI(); } else { _showFludUI(); }
+            });
+            document.addEventListener('webkitfullscreenchange', function() {
+                var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                if (isFS) { _hideFludUI(); } else { _showFludUI(); }
+            });
+
+            // Signal 3: ResizeObserver on video elements — catches CSS/custom fullscreen.
+            // Many players fake fullscreen by resizing the player element with CSS,
+            // never calling requestFullscreen(), so fullscreenchange never fires.
+            // When the video covers >= 85% of the viewport, hide the UI.
+            function _watchVideoSize(video) {
+                if (video.__flud_ro__) return;
+                var ro = new ResizeObserver(function() {
+                    var r = video.getBoundingClientRect();
+                    var large = r.width  >= window.innerWidth  * 0.85 &&
+                                r.height >= window.innerHeight * 0.85;
+                    if (large) { _hideFludUI(); } else { _showFludUI(); }
+                });
+                ro.observe(video);
+                video.__flud_ro__ = ro;
+            }
+            function _scanForVideos() {
+                document.querySelectorAll('video').forEach(_watchVideoSize);
+            }
+            _scanForVideos();
+            // Watch for video elements added dynamically (SPA page loads, lazy embeds).
+            var _videoMO = new MutationObserver(_scanForVideos);
+            _videoMO.observe(document.documentElement, { childList: true, subtree: true });
 
             if (document.body) {
                 _injectOverlay();
