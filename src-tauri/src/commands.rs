@@ -11,6 +11,7 @@ use crate::db::{
     db_delete_playlist,
     db_set_video_playlist,
 };
+use crate::db;
 
 #[tauri::command]
 pub async fn add_video(
@@ -84,6 +85,8 @@ pub async fn open_video_player(
     app: tauri::AppHandle,
     url: String,
     title: String,
+    provider_id: Option<String>,
+    state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     // Close any existing player window
     if let Some(w) = app.get_webview_window("player") {
@@ -99,6 +102,21 @@ pub async fn open_video_player(
         .map_err(|_| format!("Invalid URL: {}", url))?;
 
     let chrome_ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+
+    // Load provider mask settings; fall back to defaults if no provider_id given
+    let (mask_left, mask_right, mask_top, mask_bottom) = if let Some(ref pid) = provider_id {
+        match db::db_get_provider(&state.db, pid).await {
+            Ok(Some(p)) => (p.mask_left, p.mask_right, p.mask_top, p.mask_bottom),
+            _ => (210, 210, 125, 35),
+        }
+    } else {
+        (210, 210, 125, 35)
+    };
+
+    let hole_js = format!(
+        "var _HOLE = {{ left: {}, right: {}, top: {}, bottom: {} }};",
+        mask_left, mask_right, mask_top, mask_bottom
+    );
 
     // Runs on every page load in the player window.
     // 1. Injects Chrome fingerprint so players don't detect WKWebView.
@@ -233,7 +251,7 @@ pub async fn open_video_player(
             // Black overlay with SVG cutout hole — hides ads/chrome, exposes only the video region.
             // Injected on every page load. Re-injection guard prevents double-stacking on navigations.
             // Hole dimensions are in pixels: left/right/top/bottom insets from viewport edges.
-            var _HOLE = { left: 210, right: 210, top: 125, bottom: 35 };
+            __HOLE_PLACEHOLDER__
 
             function _positionOverlayHole() {
                 var hole = document.getElementById('__flud_hole__');
@@ -333,65 +351,14 @@ pub async fn open_video_player(
                 });
             }
 
-            // Hide overlay + navbar on play/fullscreen; restore on pause/end/exit.
-            function _hideFludUI() {
+            // Auto-hide overlay + navbar after 15 seconds — gives user time to orient,
+            // then clears the screen so the video has no distractions.
+            setTimeout(function() {
                 var nav     = document.getElementById('__flud_nav__');
                 var overlay = document.getElementById('__flud_overlay__');
                 if (nav)     nav.style.display     = 'none';
                 if (overlay) overlay.style.display = 'none';
-            }
-            function _showFludUI() {
-                var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                if (isFS) return;
-                var nav     = document.getElementById('__flud_nav__');
-                var overlay = document.getElementById('__flud_overlay__');
-                if (nav)     nav.style.display     = 'flex';
-                if (overlay) overlay.style.display = '';
-            }
-
-            // Signal 1: capture-phase media events (catches non-bubbling video events).
-            document.addEventListener('play',  function(e) {
-                if (e.target && e.target.tagName === 'VIDEO') { _hideFludUI(); }
-            }, true);
-            document.addEventListener('pause', function(e) {
-                if (e.target && e.target.tagName === 'VIDEO') { _showFludUI(); }
-            }, true);
-            document.addEventListener('ended', function(e) {
-                if (e.target && e.target.tagName === 'VIDEO') { _showFludUI(); }
-            }, true);
-
-            // Signal 2: native Fullscreen API changes (F key, native fullscreen button).
-            document.addEventListener('fullscreenchange', function() {
-                var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                if (isFS) { _hideFludUI(); } else { _showFludUI(); }
-            });
-            document.addEventListener('webkitfullscreenchange', function() {
-                var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                if (isFS) { _hideFludUI(); } else { _showFludUI(); }
-            });
-
-            // Signal 3: ResizeObserver on video elements — catches CSS/custom fullscreen.
-            // Many players fake fullscreen by resizing the player element with CSS,
-            // never calling requestFullscreen(), so fullscreenchange never fires.
-            // When the video covers >= 85% of the viewport, hide the UI.
-            function _watchVideoSize(video) {
-                if (video.__flud_ro__) return;
-                var ro = new ResizeObserver(function() {
-                    var r = video.getBoundingClientRect();
-                    var large = r.width  >= window.innerWidth  * 0.85 &&
-                                r.height >= window.innerHeight * 0.85;
-                    if (large) { _hideFludUI(); } else { _showFludUI(); }
-                });
-                ro.observe(video);
-                video.__flud_ro__ = ro;
-            }
-            function _scanForVideos() {
-                document.querySelectorAll('video').forEach(_watchVideoSize);
-            }
-            _scanForVideos();
-            // Watch for video elements added dynamically (SPA page loads, lazy embeds).
-            var _videoMO = new MutationObserver(_scanForVideos);
-            _videoMO.observe(document.documentElement, { childList: true, subtree: true });
+            }, 15000);
 
             if (document.body) {
                 _injectOverlay();
@@ -403,7 +370,7 @@ pub async fn open_video_player(
                 });
             }
         })();
-    "##;
+    "##.replace("__HOLE_PLACEHOLDER__", &hole_js);
 
     let player = tauri::WebviewWindowBuilder::new(
         &app,
@@ -451,4 +418,33 @@ pub async fn close_video_player(app: tauri::AppHandle) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn list_providers(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<db::Provider>, String> {
+    db::db_list_providers(&state.db)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_content(
+    search: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<db::Content>, String> {
+    db::db_list_content(&state.db, search.as_deref())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_content_detail(
+    content_id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<db::ContentDetail>, String> {
+    db::db_get_content_detail(&state.db, &content_id)
+        .await
+        .map_err(|e| e.to_string())
 }

@@ -43,6 +43,9 @@ pub fn run() {
             commands::set_video_playlist,
             commands::open_video_player,
             commands::close_video_player,
+            commands::list_providers,
+            commands::list_content,
+            commands::get_content_detail,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
