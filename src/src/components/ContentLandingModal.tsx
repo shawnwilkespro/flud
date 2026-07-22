@@ -31,6 +31,7 @@ interface ContentLandingModalProps {
   contentId: string | null;
   onClose: () => void;
   onPlay: (url: string, title: string, providerId: string) => void;
+  onContentUpdated?: (contentId: string) => Promise<void>;
 }
 
 async function callTauri<T>(command: string, args?: Record<string, unknown>): Promise<T | null> {
@@ -49,6 +50,7 @@ export const ContentLandingModal: React.FC<ContentLandingModalProps> = ({
   contentId,
   onClose,
   onPlay,
+  onContentUpdated,
 }) => {
   const [detail, setDetail] = useState<ContentDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -92,6 +94,9 @@ export const ContentLandingModal: React.FC<ContentLandingModalProps> = ({
     await callTauri<void>('update_content_cover', { id: content.id, coverUrlOverride: val });
     setLocalPosterOverride(val);
     setEditingPoster(false);
+    if (onContentUpdated) {
+      await onContentUpdated(content.id);
+    }
   };
 
   return (

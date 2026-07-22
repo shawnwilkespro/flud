@@ -544,9 +544,10 @@ pub async fn list_content_by_genre(
     genre: String,
     media_type: Option<String>,
     limit: Option<i64>,
+    offset: Option<i64>,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<db::Content>, String> {
-    db_list_content_by_genre(&state.db, &genre, media_type.as_deref(), limit.unwrap_or(48))
+    db_list_content_by_genre(&state.db, &genre, media_type.as_deref(), limit.unwrap_or(48), offset.unwrap_or(0))
         .await
         .map_err(|e| e.to_string())
 }

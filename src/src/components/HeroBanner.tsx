@@ -43,14 +43,16 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onPlay, onOpenDet
   if (!current) return null;
 
   const genres: string[] = current.genres ? (() => { try { return JSON.parse(current.genres) as string[]; } catch { return []; } })() : [];
+  // Use effective poster: prefer cover_url_override, fall back to poster_url
+  const effectivePoster = current.cover_url_override ?? current.poster_url;
 
   return (
     <div className="hero-banner">
       {/* Background poster */}
       <div className="hero-backdrop">
-        {current.poster_url && !bgError ? (
+        {effectivePoster && !bgError ? (
           <img
-            src={current.poster_url}
+            src={effectivePoster}
             alt={current.title}
             onError={() => setBgError(true)}
           />

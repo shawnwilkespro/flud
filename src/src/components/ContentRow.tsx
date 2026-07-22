@@ -8,6 +8,7 @@ export interface Content {
   media_type: string;
   synopsis?: string | null;
   poster_url?: string | null;
+  cover_url_override?: string | null;
   year?: number | null;
   genres?: string | null;
   rating?: number | null;
@@ -108,9 +109,10 @@ interface ContentRowProps {
   onOpenDetail: (contentId: string) => void;
   onPlay?: (contentId: string) => void;
   providerLabel?: string;
+  onBrowseAll?: () => void;
 }
 
-export const ContentRow: React.FC<ContentRowProps> = ({ title, items, onOpenDetail, onPlay, providerLabel }) => {
+export const ContentRow: React.FC<ContentRowProps> = ({ title, items, onOpenDetail, onPlay, providerLabel, onBrowseAll }) => {
   const rowRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = (dir: 'left' | 'right') => {
@@ -127,10 +129,22 @@ export const ContentRow: React.FC<ContentRowProps> = ({ title, items, onOpenDeta
 
   return (
     <div className="netflix-row">
-      <h2 className="row-header">
-        <span>{title}</span>
-        <span className="row-count">({items.length})</span>
-      </h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h2 className="row-header">
+          <span>{title}</span>
+          <span className="row-count">({items.length})</span>
+        </h2>
+        {onBrowseAll && (
+          <button
+            className="btn-netflix-secondary"
+            onClick={onBrowseAll}
+            style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+          >
+            <ChevronRight size={16} />
+            <span>Browse All</span>
+          </button>
+        )}
+      </div>
 
       <div className="row-container">
         <button className="scroll-arrow left" onClick={() => handleScroll('left')}>

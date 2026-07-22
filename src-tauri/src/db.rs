@@ -419,22 +419,25 @@ pub async fn db_list_content_by_genre(
     genre: &str,
     media_type: Option<&str>,
     limit: i64,
+    offset: i64,
 ) -> sqlx::Result<Vec<Content>> {
     let like = format!("%\"{}\"%" , genre);
     match media_type {
         Some(mt) => sqlx::query_as::<_, Content>(
-            "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE genres LIKE ?1 AND media_type = ?2 AND poster_url IS NOT NULL ORDER BY rating DESC NULLS LAST, release_date DESC NULLS LAST LIMIT ?3"
+            "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE genres LIKE ?1 AND media_type = ?2 AND poster_url IS NOT NULL ORDER BY rating DESC NULLS LAST, release_date DESC NULLS LAST LIMIT ?3 OFFSET ?4"
         )
         .bind(like)
         .bind(mt)
         .bind(limit)
+        .bind(offset)
         .fetch_all(pool)
         .await,
         None => sqlx::query_as::<_, Content>(
-            "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE genres LIKE ?1 AND poster_url IS NOT NULL ORDER BY rating DESC NULLS LAST, release_date DESC NULLS LAST LIMIT ?2"
+            "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE genres LIKE ?1 AND poster_url IS NOT NULL ORDER BY rating DESC NULLS LAST, release_date DESC NULLS LAST LIMIT ?2 OFFSET ?3"
         )
         .bind(like)
         .bind(limit)
+        .bind(offset)
         .fetch_all(pool)
         .await,
     }

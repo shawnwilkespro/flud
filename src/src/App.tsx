@@ -23,6 +23,8 @@ interface ContentDetail {
 }
 import { ContentLandingModal } from './components/ContentLandingModal';
 import { ProviderList } from './components/ProviderList';
+import { GenreCatalog } from './components/GenreCatalog';
+import { GenreGrid } from './components/GenreGrid';
 
 export interface Video {
   id: string;
@@ -135,6 +137,8 @@ export default function App() {
   const [tvOffset, setTvOffset] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [heroContent, setHeroContent] = useState<Content[]>([]);
+  const [movieHeroContent, setMovieHeroContent] = useState<Content[]>([]);
+  const [tvHeroContent, setTvHeroContent] = useState<Content[]>([]);
   const [genreRows, setGenreRows] = useState<Record<GenreName, Content[]>>({} as Record<GenreName, Content[]>);
   const [movieGenreRows, setMovieGenreRows] = useState<Record<GenreName, Content[]>>({} as Record<GenreName, Content[]>);
   const [tvGenreRows, setTvGenreRows] = useState<Record<GenreName, Content[]>>({} as Record<GenreName, Content[]>);
@@ -194,6 +198,14 @@ export default function App() {
     const recentList = await callTauri<Content[]>('list_recent_content', { limit: 20 });
     setHeroContent(recentList ?? []);
 
+    // Fetch hero content for movies and TV shows separately (10 each)
+    const [movieHeroList, tvHeroList] = await Promise.all([
+      callTauri<Content[]>('list_content', { mediaType: 'movie', limit: 10, offset: 0 }),
+      callTauri<Content[]>('list_content', { mediaType: 'tv_show', limit: 10, offset: 0 }),
+    ]);
+    setMovieHeroContent(movieHeroList ?? []);
+    setTvHeroContent(tvHeroList ?? []);
+
     const [genreResults, movieGenreResults, tvGenreResults] = await Promise.all([
       Promise.all(GENRE_ROWS.map((genre) => callTauri<Content[]>('list_content_by_genre', { genre, limit: 48 }))),
       Promise.all(GENRE_ROWS.map((genre) => callTauri<Content[]>('list_content_by_genre', { genre, mediaType: 'movie', limit: 48 }))),
@@ -212,6 +224,18 @@ export default function App() {
     setTvGenreRows(newTvGenreRows);
 
     setLoading(false);
+  };
+
+  const handleContentUpdated = async (_contentId: string) => {
+    // Refetch hero content when a catalog item is updated
+    const [recentList, movieHeroList, tvHeroList] = await Promise.all([
+      callTauri<Content[]>('list_recent_content', { limit: 20 }),
+      callTauri<Content[]>('list_content', { mediaType: 'movie', limit: 10, offset: 0 }),
+      callTauri<Content[]>('list_content', { mediaType: 'tv_show', limit: 10, offset: 0 }),
+    ]);
+    setHeroContent(recentList ?? []);
+    setMovieHeroContent(movieHeroList ?? []);
+    setTvHeroContent(tvHeroList ?? []);
   };
 
   useEffect(() => {
@@ -388,6 +412,12 @@ export default function App() {
   );
 
   const renderCatalogTab = () => {
+    // Genre catalog pages
+    if (activeTab.startsWith('genre-')) {
+      const genre = activeTab.slice(6); // Remove 'genre-' prefix
+      return <GenreCatalog genre={genre} onOpenDetail={setSelectedContentId} onPlay={handlePlayContentDirect} />;
+    }
+
     if (activeTab === 'movies') {
       if (movieChunks.length === 0) {
         return (
@@ -400,6 +430,9 @@ export default function App() {
       }
       return (
         <>
+          {movieHeroContent.length > 0 && (
+            <HeroBanner items={movieHeroContent.slice(0, 10)} onPlay={handlePlayContentDirect} onOpenDetail={setSelectedContentId} />
+          )}
           {movieChunks.map((chunk, i) => (
             <ContentRow
               key={i}
@@ -420,6 +453,7 @@ export default function App() {
                 onOpenDetail={setSelectedContentId}
                 onPlay={handlePlayContentDirect}
                 providerLabel="FMovies"
+                onBrowseAll={() => setActiveTab(`genre-${genre.toLowerCase()}`)}
               />
             ) : null
           )}
@@ -439,6 +473,9 @@ export default function App() {
       }
       return (
         <>
+          {tvHeroContent.length > 0 && (
+            <HeroBanner items={tvHeroContent.slice(0, 10)} onPlay={handlePlayContentDirect} onOpenDetail={setSelectedContentId} />
+          )}
           {tvChunks.map((chunk, i) => (
             <ContentRow
               key={i}
@@ -459,6 +496,7 @@ export default function App() {
                 onOpenDetail={setSelectedContentId}
                 onPlay={handlePlayContentDirect}
                 providerLabel="FMovies"
+                onBrowseAll={() => setActiveTab(`genre-${genre.toLowerCase()}`)}
               />
             ) : null
           )}
@@ -573,6 +611,7 @@ export default function App() {
                       onOpenDetail={setSelectedContentId}
                       onPlay={handlePlayContentDirect}
                       providerLabel="FMovies"
+                      onBrowseAll={() => setActiveTab(`genre-${genre.toLowerCase()}`)}
                     />
                   ) : null
                 )}
@@ -627,9 +666,11 @@ export default function App() {
                       onOpenDetail={setSelectedContentId}
                       onPlay={handlePlayContentDirect}
                       providerLabel="FMovies"
+                      onBrowseAll={() => setActiveTab(`genre-${genre.toLowerCase()}`)}
                     />
                   ) : null
                 )}
+                <GenreGrid genres={GENRE_ROWS} onSelectGenre={(genre) => setActiveTab(`genre-${genre.toLowerCase()}`)} />
               </>
             ) : activeTab === 'playlists' ? (
               <>
@@ -655,7 +696,7 @@ export default function App() {
 
       <MovieModal video={selectedVideoModal} playlists={playlists} onClose={() => setSelectedVideoModal(null)}
         onPlay={handlePlayWebview} onDelete={handleDeleteVideo} onSetPlaylist={handleSetVideoPlaylist} onUpdateCover={handleUpdateVideoCover} />
-      <ContentLandingModal contentId={selectedContentId} onClose={() => setSelectedContentId(null)} onPlay={handlePlayContent} />
+      <ContentLandingModal contentId={selectedContentId} onClose={() => setSelectedContentId(null)} onPlay={handlePlayContent} onContentUpdated={handleContentUpdated} />
       <AddVideoModal isOpen={isAddVideoOpen} onClose={() => setIsAddVideoOpen(false)} onAddVideo={handleAddVideo} />
       <AddPlaylistModal isOpen={isAddPlaylistOpen} onClose={() => setIsAddPlaylistOpen(false)} onAddPlaylist={handleAddPlaylist} />
     </div>
