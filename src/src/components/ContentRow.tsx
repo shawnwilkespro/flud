@@ -11,6 +11,7 @@ export interface Content {
   year?: number | null;
   genres?: string | null;
   rating?: number | null;
+  release_date?: string | null;
 }
 
 interface ContentCardProps {

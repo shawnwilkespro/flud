@@ -52,6 +52,7 @@ body {
   width: 100vw;
   background-color: var(--netflix-black);
   position: relative;
+  padding-top: 99px;
 }
 
 /* Navbar */
@@ -60,7 +61,7 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 68px;
+  height: 99px;
   padding: 0 4%;
   display: flex;
   align-items: center;

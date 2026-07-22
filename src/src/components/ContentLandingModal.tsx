@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Play, Star, Tv, Film } from 'lucide-react';
+import { X, Play, Star, Tv, Film, Pencil } from 'lucide-react';
 
 interface Content {
   id: string;
@@ -8,9 +8,11 @@ interface Content {
   media_type: string;
   synopsis?: string | null;
   poster_url?: string | null;
+  cover_url_override?: string | null;
   year?: number | null;
   genres?: string | null;
   rating?: number | null;
+  release_date?: string | null;
 }
 
 interface ContentSource {
@@ -50,13 +52,19 @@ export const ContentLandingModal: React.FC<ContentLandingModalProps> = ({
 }) => {
   const [detail, setDetail] = useState<ContentDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [editingPoster, setEditingPoster] = useState(false);
+  const [posterInput, setPosterInput] = useState('');
+  const [localPosterOverride, setLocalPosterOverride] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
     if (!contentId) {
       setDetail(null);
+      setLocalPosterOverride(undefined);
       return;
     }
     setLoading(true);
+    setLocalPosterOverride(undefined);
+    setEditingPoster(false);
     callTauri<ContentDetail | null>('get_content_detail', { contentId }).then((d) => {
       setDetail(d ?? null);
       setLoading(false);
@@ -73,6 +81,18 @@ export const ContentLandingModal: React.FC<ContentLandingModalProps> = ({
   const sources = detail?.sources ?? [];
   const isTV = content?.media_type === 'tv_show';
   const genres = content?.genres ? (JSON.parse(content.genres) as string[]) : [];
+
+  const effectivePoster = localPosterOverride !== undefined
+    ? localPosterOverride
+    : (content?.cover_url_override ?? content?.poster_url ?? null);
+
+  const handleSavePoster = async () => {
+    if (!content) return;
+    const val = posterInput.trim() || null;
+    await callTauri<void>('update_content_cover', { id: content.id, coverUrlOverride: val });
+    setLocalPosterOverride(val);
+    setEditingPoster(false);
+  };
 
   return (
     <div
@@ -96,12 +116,37 @@ export const ContentLandingModal: React.FC<ContentLandingModalProps> = ({
           <div className="content-landing-body">
             {/* Poster */}
             <div className="content-landing-poster">
-              {content.poster_url ? (
-                <img src={content.poster_url} alt={content.title} />
+              {effectivePoster ? (
+                <img src={effectivePoster} alt={content.title} />
               ) : (
                 <div className="poster-fallback">
                   {isTV ? <Tv size={48} /> : <Film size={48} />}
                 </div>
+              )}
+              {editingPoster ? (
+                <div className="flex flex-col gap-2 mt-2">
+                  <input
+                    className="modal-select w-full"
+                    type="text"
+                    value={posterInput}
+                    onChange={(e) => setPosterInput(e.target.value)}
+                    placeholder="https://..."
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button className="btn-netflix-primary" style={{ fontSize: '0.75rem', padding: '0.35rem 0.8rem' }} onClick={handleSavePoster}>Save</button>
+                    <button className="btn-netflix-secondary" style={{ fontSize: '0.75rem', padding: '0.35rem 0.8rem' }} onClick={() => setEditingPoster(false)}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="btn-netflix-secondary mt-2 w-full"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem', justifyContent: 'center' }}
+                  onClick={() => { setPosterInput(effectivePoster ?? ''); setEditingPoster(true); }}
+                >
+                  <Pencil size={12} />
+                  Change Poster
+                </button>
               )}
             </div>
 
@@ -110,7 +155,10 @@ export const ContentLandingModal: React.FC<ContentLandingModalProps> = ({
               <h2 className="content-landing-title">{content.title}</h2>
 
               <div className="content-landing-meta">
-                {content.year && <span>{content.year}</span>}
+                {content.release_date
+                  ? <span>{new Date(content.release_date + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                  : content.year && <span>{content.year}</span>
+                }
                 {content.rating && (
                   <span className="rating-pill">
                     <Star size={13} fill="currentColor" />

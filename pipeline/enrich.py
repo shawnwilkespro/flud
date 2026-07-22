@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import json
 import re
 import sqlite3
 import time
@@ -94,11 +95,30 @@ def search_tmdb(title: str, media_type: str, api_key: str) -> dict | None:
             "synopsis": top.get("overview") or None,
             "poster_url": f"{TMDB_IMAGE_BASE}{poster}" if poster else None,
             "year": year,
+            "release_date": release or None,
             "rating": top.get("vote_average") or None,
+            "genre_ids": top.get("genre_ids", []),
         }
     except Exception as e:
         print(f"  TMDB error for '{title}': {e}")
         return None
+
+
+def fetch_genre_map(api_key: str, media_type: str) -> dict:
+    """Fetch genre ID -> name map from TMDB for 'movie' or 'tv'."""
+    endpoint = "movie" if media_type == "movie" else "tv"
+    try:
+        r = requests.get(
+            f"{TMDB_BASE}/genre/{endpoint}/list",
+            params={"api_key": api_key},
+            timeout=10,
+        )
+        r.raise_for_status()
+        genres = r.json().get("genres", [])
+        return {g["id"]: g["name"] for g in genres}
+    except Exception as e:
+        print(f"  Failed to fetch {endpoint} genre map: {e}")
+        return {}
 
 
 def enrich_record(row: tuple, provider_id: str, api_key: str, delay: float) -> dict:
@@ -148,6 +168,11 @@ def run(provider_id: str, api_key: str, source_db: Path, flud_db: Path):
     src_conn.close()
     print(f"Processing {len(rows)} new records from {source_db}...")
 
+    print("Fetching genre maps from TMDB...")
+    movie_genre_map = fetch_genre_map(api_key, "movie")
+    tv_genre_map = fetch_genre_map(api_key, "tv")
+    print(f"  movie genres: {len(movie_genre_map)}, tv genres: {len(tv_genre_map)}")
+
     matched = 0
     unmatched = 0
     errors = 0
@@ -181,10 +206,13 @@ def run(provider_id: str, api_key: str, source_db: Path, flud_db: Path):
                     content_id = existing["id"]
                 else:
                     content_id = str(uuid.uuid4())
+                    genre_map_for_type = movie_genre_map if media_type == "movie" else tv_genre_map
+                    genre_names = [genre_map_for_type[gid] for gid in tmdb.get("genre_ids", []) if gid in genre_map_for_type]
+                    genres_json = json.dumps(genre_names) if genre_names else None
                     cur.execute(
                         """INSERT OR IGNORE INTO content
-                           (id, tmdb_id, title, media_type, synopsis, poster_url, year, rating)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (id, tmdb_id, title, media_type, synopsis, poster_url, year, rating, genres, release_date)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             content_id,
                             tmdb["tmdb_id"],
@@ -194,6 +222,8 @@ def run(provider_id: str, api_key: str, source_db: Path, flud_db: Path):
                             tmdb["poster_url"],
                             tmdb["year"],
                             tmdb["rating"],
+                            genres_json,
+                            tmdb.get("release_date"),
                         ),
                     )
                 matched += 1

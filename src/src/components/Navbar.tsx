@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, FolderPlus, MonitorPlay } from 'lucide-react';
+import { Search, Plus, FolderPlus } from 'lucide-react';
 
 interface NavbarProps {
   searchQuery: string;
@@ -35,17 +35,28 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <nav className={`netflix-navbar ${isScrolled ? 'scrolled' : ''}`}>
       <div className="navbar-left">
-        <div className="brand-logo-group" onClick={() => setActiveTab('home')}>
-          <div className="brand-icon">
-            <MonitorPlay size={22} color="#fff" />
-          </div>
+        <div className="brand-logo-group" onClick={() => { setActiveTab('home'); setSearchQuery(''); }}>
+          <svg width="99" height="99" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" preserveAspectRatio="xMidYMid meet">
+            <g transform="translate(10, 10) rotate(15 32 32)">
+              <path d="M13.5 31.5c0-2.6 2.4-4.7 5.3-4.7h.1c2.9 0 6.3 2.1 6.3 4.7L22.6 6.4c0-2.4 3-4.4 6.9-4.4h.1c3.8 0 6.9 2 6.9 4.4L35.3 31c0-2.6 2.4-4.7 5.3-4.7h.1c2.9 0 5.3 2.1 5.3 4.7v2.7c.5-1.9 2.4-3.2 4.6-2.7c4.5 1.2 3.6 4.8 4.1 8.7c.5 4.8 1.7 7.9 1.3 9.6c-1 3.7-3.7 3.2-5.1 4.2c-1.4 1-1.8 2.6-2.9 3.6c-2.2 2-6.2 1.6-9.8 2.5c-3.1.8-5.9 2.6-8.3 2.3c-2.7-.3-3.4-2.6-6.4-4c-3-1.4-7.1-.7-8.3-3.1c-2.3-4.8-1.7-23.3-1.7-23.3" fill="#4169E1"></path>
+              <g fill="#9D00FF">
+                <path d="M13.5 31.5c0-1.4.7-2.7 1.8-3.5c-1.9 2.4-.6 19.4 1.7 24.2c1.2 2.4 5.3 1.7 8.3 3.1c3 1.4 3.7 3.8 6.4 4c2.4.3 5.2-1.4 8.3-2.1c3.6-.9 6.1-.6 8.3-2.6c1.1-1 1.6-2.5 3.8-3.2c1.6-.5 2.7-1 3.9-2.2v.1c-1 3.7-3.7 3.2-5.1 4.2c-1.4 1-1.8 2.6-2.9 3.6c-2.2 2-6.2 1.6-9.8 2.5c-3.1.8-5.9 2.6-8.3 2.3c-2.7-.3-3.4-2.6-6.4-4c-3-1.4-7.1-.7-8.3-3.1c-2.3-4.8-1.7-23.3-1.7-23.3"></path>
+                <path d="M22.6 5.3c-.9 3.8 2.5 38.4 2.5 38.4c0 2.5 1.3 1.5 1.3-1c0 0-3.6-32.5-2.6-37.3c.4-2 1.8-2.6 4.2-3.3c0 0-4.6.2-5.4 3.2"></path>
+                <path d="M37 42.3v-13c0-.7.1-1.4.5-2c-1.3.9-2.1 2.2-2.1 3.7v13c-.1 2.7 1.6.9 1.6-1.7"></path>
+                <path d="M47.4 43.6V33.2c0-.6.1-1.2.4-1.8c-1.1.8-1.9 2-1.9 3.4v10.4c0 2.3 1.5.7 1.5-1.6"></path>
+                <path d="M34.4 10.8c.8-5.3-1.7-5.5-4.8-5.5c-3.1 0-5.6.2-4.8 5.5c.3 2 2.4 2.7 4.8 2.7s4.5-.8 4.8-2.7"></path>
+              </g>
+              <path d="M34.5 9.9c.8-5.7-1.7-5.9-4.9-5.9s-5.7.2-4.9 5.8c.3 2.1 2.4 2.8 4.9 2.8c2.5 0 4.6-.7 4.9-2.7" fill="#ffffff"></path>
+              <path d="M15.2 53.6c-3.6-4.2-8.3-6.4-7.1-9.5c1-3 3.1-2.9 5.8-6.3l1.3 15.8" fill="#9D00FF"></path>
+            </g>
+          </svg>
           <span className="brand-name">FLUD</span>
         </div>
 
         <div className="nav-links">
           <button
             className={`nav-link ${activeTab === 'home' ? 'active' : ''}`}
-            onClick={() => setActiveTab('home')}
+            onClick={() => { setActiveTab('home'); setSearchQuery(''); }}
           >
             Home
           </button>

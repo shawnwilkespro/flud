@@ -44,6 +44,7 @@ pub struct Content {
     pub year: Option<i32>,
     pub genres: Option<String>, // JSON array string
     pub rating: Option<f64>,
+    pub release_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,6 +137,11 @@ pub async fn init_db() -> sqlx::Result<SqlitePool> {
 
     // Add cover_url_override column if it doesn't exist yet (idempotent migration)
     let _ = sqlx::query("ALTER TABLE content ADD COLUMN cover_url_override TEXT")
+        .execute(&pool)
+        .await;
+
+    // Add release_date column if it doesn't exist yet (idempotent migration)
+    let _ = sqlx::query("ALTER TABLE content ADD COLUMN release_date TEXT")
         .execute(&pool)
         .await;
 
@@ -318,7 +324,7 @@ pub async fn db_list_content(
         (Some(q), Some(mt)) => {
             let like = format!("%{}%", q);
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating FROM content WHERE title LIKE ?1 AND media_type = ?2 ORDER BY title ASC LIMIT ?3 OFFSET ?4"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE title LIKE ?1 AND media_type = ?2 ORDER BY title ASC LIMIT ?3 OFFSET ?4"
             )
             .bind(like)
             .bind(mt)
@@ -330,7 +336,7 @@ pub async fn db_list_content(
         (Some(q), None) => {
             let like = format!("%{}%", q);
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating FROM content WHERE title LIKE ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE title LIKE ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
             )
             .bind(like)
             .bind(lim)
@@ -340,7 +346,7 @@ pub async fn db_list_content(
         }
         (None, Some(mt)) => {
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating FROM content WHERE media_type = ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE media_type = ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
             )
             .bind(mt)
             .bind(lim)
@@ -350,7 +356,7 @@ pub async fn db_list_content(
         }
         (None, None) => {
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating FROM content ORDER BY title ASC LIMIT ?1 OFFSET ?2"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content ORDER BY title ASC LIMIT ?1 OFFSET ?2"
             )
             .bind(lim)
             .bind(off)
@@ -365,7 +371,7 @@ pub async fn db_get_content_detail(
     content_id: &str,
 ) -> sqlx::Result<Option<ContentDetail>> {
     let content = sqlx::query_as::<_, Content>(
-        "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating FROM content WHERE id = ?1"
+        "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE id = ?1"
     )
     .bind(content_id)
     .fetch_optional(pool)
@@ -397,6 +403,41 @@ pub async fn db_get_content_detail(
     .collect();
 
     Ok(Some(ContentDetail { content, sources }))
+}
+
+pub async fn db_list_recent_content(pool: &SqlitePool, limit: i64) -> sqlx::Result<Vec<Content>> {
+    sqlx::query_as::<_, Content>(
+        "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE poster_url IS NOT NULL ORDER BY release_date DESC NULLS LAST, year DESC NULLS LAST LIMIT ?1"
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn db_list_content_by_genre(
+    pool: &SqlitePool,
+    genre: &str,
+    media_type: Option<&str>,
+    limit: i64,
+) -> sqlx::Result<Vec<Content>> {
+    let like = format!("%\"{}\"%" , genre);
+    match media_type {
+        Some(mt) => sqlx::query_as::<_, Content>(
+            "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE genres LIKE ?1 AND media_type = ?2 AND poster_url IS NOT NULL ORDER BY rating DESC NULLS LAST, release_date DESC NULLS LAST LIMIT ?3"
+        )
+        .bind(like)
+        .bind(mt)
+        .bind(limit)
+        .fetch_all(pool)
+        .await,
+        None => sqlx::query_as::<_, Content>(
+            "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE genres LIKE ?1 AND poster_url IS NOT NULL ORDER BY rating DESC NULLS LAST, release_date DESC NULLS LAST LIMIT ?2"
+        )
+        .bind(like)
+        .bind(limit)
+        .fetch_all(pool)
+        .await,
+    }
 }
 
 pub async fn db_update_video_cover(pool: &SqlitePool, id: &str, cover_url: &str) -> sqlx::Result<()> {

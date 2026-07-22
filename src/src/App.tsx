@@ -93,6 +93,8 @@ const DEMO_PLAYLISTS: Playlist[] = [
 ];
 
 const PAGE_SIZE = 500;
+const GENRE_ROWS = ['Action', 'Drama', 'Thriller', 'Comedy', 'Crime', 'Horror', 'Romance'] as const;
+type GenreName = typeof GENRE_ROWS[number];
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -131,9 +133,11 @@ export default function App() {
   const [tvShows, setTvShows] = useState<Content[]>([]);
   const [movieOffset, setMovieOffset] = useState(0);
   const [tvOffset, setTvOffset] = useState(0);
-  const [movieTotal, setMovieTotal] = useState(0);
-  const [tvTotal, setTvTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [heroContent, setHeroContent] = useState<Content[]>([]);
+  const [genreRows, setGenreRows] = useState<Record<GenreName, Content[]>>({} as Record<GenreName, Content[]>);
+  const [movieGenreRows, setMovieGenreRows] = useState<Record<GenreName, Content[]>>({} as Record<GenreName, Content[]>);
+  const [tvGenreRows, setTvGenreRows] = useState<Record<GenreName, Content[]>>({} as Record<GenreName, Content[]>);
 
   // Catalog search results (separate from video search)
   const [catalogSearchResults, setCatalogSearchResults] = useState<Content[]>([]);
@@ -186,9 +190,26 @@ export default function App() {
     setTvShows(tvList);
     setMovieOffset(mList.length);
     setTvOffset(tvList.length);
-    // We don't have a total count from the DB — use PAGE_SIZE as the "has more" signal
-    setMovieTotal(mList.length === PAGE_SIZE ? Infinity : mList.length);
-    setTvTotal(tvList.length === PAGE_SIZE ? Infinity : tvList.length);
+
+    const recentList = await callTauri<Content[]>('list_recent_content', { limit: 20 });
+    setHeroContent(recentList ?? []);
+
+    const [genreResults, movieGenreResults, tvGenreResults] = await Promise.all([
+      Promise.all(GENRE_ROWS.map((genre) => callTauri<Content[]>('list_content_by_genre', { genre, limit: 48 }))),
+      Promise.all(GENRE_ROWS.map((genre) => callTauri<Content[]>('list_content_by_genre', { genre, mediaType: 'movie', limit: 48 }))),
+      Promise.all(GENRE_ROWS.map((genre) => callTauri<Content[]>('list_content_by_genre', { genre, mediaType: 'tv_show', limit: 48 }))),
+    ]);
+    const newGenreRows = {} as Record<GenreName, Content[]>;
+    const newMovieGenreRows = {} as Record<GenreName, Content[]>;
+    const newTvGenreRows = {} as Record<GenreName, Content[]>;
+    GENRE_ROWS.forEach((genre, i) => {
+      newGenreRows[genre] = genreResults[i] ?? [];
+      newMovieGenreRows[genre] = movieGenreResults[i] ?? [];
+      newTvGenreRows[genre] = tvGenreResults[i] ?? [];
+    });
+    setGenreRows(newGenreRows);
+    setMovieGenreRows(newMovieGenreRows);
+    setTvGenreRows(newTvGenreRows);
 
     setLoading(false);
   };
@@ -226,7 +247,6 @@ export default function App() {
     const next = await fetchCatalogPage('movie', movieOffset);
     setMovies((prev) => [...prev, ...next]);
     setMovieOffset((prev) => prev + next.length);
-    if (next.length < PAGE_SIZE) setMovieTotal(movieOffset + next.length);
     setLoadingMore(false);
   };
 
@@ -235,7 +255,6 @@ export default function App() {
     const next = await fetchCatalogPage('tv_show', tvOffset);
     setTvShows((prev) => [...prev, ...next]);
     setTvOffset((prev) => prev + next.length);
-    if (next.length < PAGE_SIZE) setTvTotal(tvOffset + next.length);
     setLoadingMore(false);
   };
 
@@ -337,18 +356,8 @@ export default function App() {
     );
   }, [videos, searchQuery]);
 
-  // Pick 10 featured movies from catalog for the hero carousel
-  const heroItems = useMemo(() => {
-    const withPosters = movies.filter((m) => m.poster_url);
-    if (withPosters.length === 0) return movies.slice(0, 10);
-    // Grab a spread from the catalog so it's not always the first 10 alphabetically
-    const step = Math.max(1, Math.floor(withPosters.length / 10));
-    const picked: Content[] = [];
-    for (let i = 0; i < withPosters.length && picked.length < 10; i += step) {
-      picked.push(withPosters[i]);
-    }
-    return picked;
-  }, [movies]);
+  // 10 most recently released movies for the hero banner (sorted by release_date DESC in DB)
+  const heroItems = useMemo(() => heroContent.slice(0, 10), [heroContent]);
 
   const allTags = useMemo(() => {
     const set = new Set<string>();
@@ -402,6 +411,18 @@ export default function App() {
             />
           ))}
           {hasMoreMovies && <LoadMoreButton onClick={loadMoreMovies} />}
+          {GENRE_ROWS.map((genre) =>
+            movieGenreRows[genre]?.length ? (
+              <ContentRow
+                key={`movie-genre-${genre}`}
+                title={genre}
+                items={movieGenreRows[genre]}
+                onOpenDetail={setSelectedContentId}
+                onPlay={handlePlayContentDirect}
+                providerLabel="FMovies"
+              />
+            ) : null
+          )}
         </>
       );
     }
@@ -429,6 +450,18 @@ export default function App() {
             />
           ))}
           {hasMoreTv && <LoadMoreButton onClick={loadMoreTv} />}
+          {GENRE_ROWS.map((genre) =>
+            tvGenreRows[genre]?.length ? (
+              <ContentRow
+                key={`tv-genre-${genre}`}
+                title={genre}
+                items={tvGenreRows[genre]}
+                onOpenDetail={setSelectedContentId}
+                onPlay={handlePlayContentDirect}
+                providerLabel="FMovies"
+              />
+            ) : null
+          )}
         </>
       );
     }
@@ -531,6 +564,18 @@ export default function App() {
                     providerLabel="FMovies"
                   />
                 )}
+                {GENRE_ROWS.map((genre) =>
+                  genreRows[genre]?.length ? (
+                    <ContentRow
+                      key={genre}
+                      title={genre}
+                      items={genreRows[genre]}
+                      onOpenDetail={setSelectedContentId}
+                      onPlay={handlePlayContentDirect}
+                      providerLabel="FMovies"
+                    />
+                  ) : null
+                )}
               </>
             ) : (
               <div style={{ textAlign: 'center', padding: '5rem 2rem' }}>
@@ -573,6 +618,18 @@ export default function App() {
                 {tvChunks.length > 0 && (
                   <ContentRow title={`Catalog: TV Shows (${tvShows.length.toLocaleString()})`} items={tvChunks[0]} onOpenDetail={setSelectedContentId} onPlay={handlePlayContentDirect} providerLabel="FMovies" />
                 )}
+                {GENRE_ROWS.map((genre) =>
+                  genreRows[genre]?.length ? (
+                    <ContentRow
+                      key={genre}
+                      title={genre}
+                      items={genreRows[genre]}
+                      onOpenDetail={setSelectedContentId}
+                      onPlay={handlePlayContentDirect}
+                      providerLabel="FMovies"
+                    />
+                  ) : null
+                )}
               </>
             ) : activeTab === 'playlists' ? (
               <>
@@ -597,7 +654,7 @@ export default function App() {
       </div>
 
       <MovieModal video={selectedVideoModal} playlists={playlists} onClose={() => setSelectedVideoModal(null)}
-        onPlay={handlePlayWebview} onDelete={handleDeleteVideo} onSetPlaylist={handleSetVideoPlaylist} />
+        onPlay={handlePlayWebview} onDelete={handleDeleteVideo} onSetPlaylist={handleSetVideoPlaylist} onUpdateCover={handleUpdateVideoCover} />
       <ContentLandingModal contentId={selectedContentId} onClose={() => setSelectedContentId(null)} onPlay={handlePlayContent} />
       <AddVideoModal isOpen={isAddVideoOpen} onClose={() => setIsAddVideoOpen(false)} onAddVideo={handleAddVideo} />
       <AddPlaylistModal isOpen={isAddPlaylistOpen} onClose={() => setIsAddPlaylistOpen(false)} onAddPlaylist={handleAddPlaylist} />

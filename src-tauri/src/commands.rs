@@ -12,6 +12,8 @@ use crate::db::{
     db_set_video_playlist,
     db_update_video_cover,
     db_update_content_cover,
+    db_list_recent_content,
+    db_list_content_by_genre,
 };
 use crate::db;
 
@@ -523,6 +525,28 @@ pub async fn get_content_detail(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<db::ContentDetail>, String> {
     db::db_get_content_detail(&state.db, &content_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_recent_content(
+    limit: Option<i64>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<db::Content>, String> {
+    db_list_recent_content(&state.db, limit.unwrap_or(20))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_content_by_genre(
+    genre: String,
+    media_type: Option<String>,
+    limit: Option<i64>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<db::Content>, String> {
+    db_list_content_by_genre(&state.db, &genre, media_type.as_deref(), limit.unwrap_or(48))
         .await
         .map_err(|e| e.to_string())
 }
