@@ -76,11 +76,10 @@ export const ContentLandingModal: React.FC<ContentLandingModalProps> = ({
 
   return (
     <div
-      className="modal-backdrop"
+      className="netflix-modal-backdrop"
       onClick={handleBackdropClick}
-      style={{ zIndex: 1000 }}
     >
-      <div className="modal-content content-landing-modal">
+      <div className="netflix-modal-card content-landing-modal">
         <button className="modal-close-btn" onClick={onClose}>
           <X size={20} />
         </button>

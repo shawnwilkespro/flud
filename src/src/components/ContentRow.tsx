@@ -105,9 +105,11 @@ interface ContentRowProps {
   title: string;
   items: Content[];
   onOpenDetail: (contentId: string) => void;
+  onPlay?: (contentId: string) => void;
+  providerLabel?: string;
 }
 
-export const ContentRow: React.FC<ContentRowProps> = ({ title, items, onOpenDetail }) => {
+export const ContentRow: React.FC<ContentRowProps> = ({ title, items, onOpenDetail, onPlay, providerLabel }) => {
   const rowRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = (dir: 'left' | 'right') => {
@@ -136,7 +138,7 @@ export const ContentRow: React.FC<ContentRowProps> = ({ title, items, onOpenDeta
 
         <div className="row-cards" ref={rowRef}>
           {items.map((item) => (
-            <ContentCard key={item.id} item={item} onOpenDetail={onOpenDetail} />
+            <ContentCard key={item.id} item={item} onOpenDetail={onOpenDetail} onPlay={onPlay} providerLabel={providerLabel} />
           ))}
         </div>
 

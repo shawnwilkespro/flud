@@ -9,6 +9,18 @@ import { Sparkles, Film, Plus, ChevronDown } from 'lucide-react';
 import { parseTags } from './utils';
 import { ContentRow } from './components/ContentRow';
 import type { Content } from './components/ContentRow';
+
+interface ContentSource {
+  provider_id: string;
+  provider_name: string;
+  page_url: string;
+  season_number?: number | null;
+}
+
+interface ContentDetail {
+  content: Content;
+  sources: ContentSource[];
+}
 import { ContentLandingModal } from './components/ContentLandingModal';
 import { ProviderList } from './components/ProviderList';
 
@@ -147,18 +159,21 @@ export default function App() {
     const vList = await callTauri<Video[]>('list_videos');
     const pList = await callTauri<Playlist[]>('list_playlists');
 
-    if (vList !== null && vList.length > 0) {
+    if (vList !== null) {
       setVideos(vList);
+      // DB is authoritative — clear any stale localStorage
+      localStorage.removeItem('flud_netflix_videos');
     } else {
       const savedV = localStorage.getItem('flud_netflix_videos');
-      setVideos(savedV ? JSON.parse(savedV) : DEMO_VIDEOS);
+      setVideos(savedV ? JSON.parse(savedV) : []);
     }
 
-    if (pList !== null && pList.length > 0) {
+    if (pList !== null) {
       setPlaylists(pList);
+      localStorage.removeItem('flud_netflix_playlists');
     } else {
       const savedP = localStorage.getItem('flud_netflix_playlists');
-      setPlaylists(savedP ? JSON.parse(savedP) : DEMO_PLAYLISTS);
+      setPlaylists(savedP ? JSON.parse(savedP) : []);
     }
 
     // Initial page load — offset 0 for both
@@ -281,6 +296,28 @@ export default function App() {
     if (res === null) window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  // Direct play from catalog card — fetches first source and plays without opening the modal
+  const handlePlayContentDirect = useCallback(async (contentId: string) => {
+    const detail = await callTauri<ContentDetail>('get_content_detail', { contentId });
+    if (!detail || detail.sources.length === 0) {
+      // No sources found — fall back to the detail modal so user can see why
+      setSelectedContentId(contentId);
+      return;
+    }
+    // For TV shows with seasons, open modal so user can pick a season
+    if (detail.content.media_type === 'tv_show' && detail.sources.length > 1) {
+      setSelectedContentId(contentId);
+      return;
+    }
+    const src = detail.sources[0];
+    const res = await callTauri<void>('open_video_player', {
+      url: src.page_url,
+      title: detail.content.title,
+      providerId: src.provider_id,
+    });
+    if (res === null) window.open(src.page_url, '_blank', 'noopener,noreferrer');
+  }, []);
+
   const handleSeedData = () => {
     updateLocalVideos(DEMO_VIDEOS);
     updateLocalPlaylists(DEMO_PLAYLISTS);
@@ -295,7 +332,18 @@ export default function App() {
     );
   }, [videos, searchQuery]);
 
-  const heroVideo = useMemo(() => filteredVideos[0] ?? null, [filteredVideos]);
+  // Pick 10 featured movies from catalog for the hero carousel
+  const heroItems = useMemo(() => {
+    const withPosters = movies.filter((m) => m.poster_url);
+    if (withPosters.length === 0) return movies.slice(0, 10);
+    // Grab a spread from the catalog so it's not always the first 10 alphabetically
+    const step = Math.max(1, Math.floor(withPosters.length / 10));
+    const picked: Content[] = [];
+    for (let i = 0; i < withPosters.length && picked.length < 10; i += step) {
+      picked.push(withPosters[i]);
+    }
+    return picked;
+  }, [movies]);
 
   const allTags = useMemo(() => {
     const set = new Set<string>();
@@ -344,6 +392,8 @@ export default function App() {
               title={i === 0 ? `Movies · ${movies.length.toLocaleString()} loaded` : `Movies · Page ${i + 1}`}
               items={chunk}
               onOpenDetail={setSelectedContentId}
+              onPlay={handlePlayContentDirect}
+              providerLabel="FMovies"
             />
           ))}
           {hasMoreMovies && <LoadMoreButton onClick={loadMoreMovies} />}
@@ -369,6 +419,8 @@ export default function App() {
               title={i === 0 ? `TV Shows · ${tvShows.length.toLocaleString()} loaded` : `TV Shows · Page ${i + 1}`}
               items={chunk}
               onOpenDetail={setSelectedContentId}
+              onPlay={handlePlayContentDirect}
+              providerLabel="FMovies"
             />
           ))}
           {hasMoreTv && <LoadMoreButton onClick={loadMoreTv} />}
@@ -391,8 +443,8 @@ export default function App() {
         setActiveTab={setActiveTab}
       />
 
-      {!searchQuery && heroVideo && !isCatalogTab && (
-        <HeroBanner video={heroVideo} onPlay={handlePlayWebview} onOpenDetails={(v) => setSelectedVideoModal(v)} />
+      {!searchQuery && heroItems.length > 0 && !isCatalogTab && (
+        <HeroBanner items={heroItems} onPlay={handlePlayContentDirect} onOpenDetail={setSelectedContentId} />
       )}
 
       <div className="rows-wrapper" style={{ marginTop: searchQuery ? '90px' : undefined }}>
@@ -417,6 +469,8 @@ export default function App() {
                     title={i === 0 ? `Catalog Results (${catalogSearchResults.length})` : `Catalog Results · Page ${i + 1}`}
                     items={chunk}
                     onOpenDetail={setSelectedContentId}
+                    onPlay={handlePlayContentDirect}
+                    providerLabel="FMovies"
                   />
                 ))}
               </>
@@ -459,6 +513,8 @@ export default function App() {
                     title={`Movies · ${movies.length.toLocaleString()} loaded`}
                     items={movieChunks[0]}
                     onOpenDetail={setSelectedContentId}
+                    onPlay={handlePlayContentDirect}
+                    providerLabel="FMovies"
                   />
                 )}
                 {tvChunks.length > 0 && (
@@ -466,6 +522,8 @@ export default function App() {
                     title={`TV Shows · ${tvShows.length.toLocaleString()} loaded`}
                     items={tvChunks[0]}
                     onOpenDetail={setSelectedContentId}
+                    onPlay={handlePlayContentDirect}
+                    providerLabel="FMovies"
                   />
                 )}
               </>
@@ -505,10 +563,10 @@ export default function App() {
                     onPlay={handlePlayWebview} onOpenDetails={(v) => setSelectedVideoModal(v)} onDeleteVideo={handleDeleteVideo} />;
                 })}
                 {movieChunks.length > 0 && (
-                  <ContentRow title={`Catalog: Movies (${movies.length.toLocaleString()})`} items={movieChunks[0]} onOpenDetail={setSelectedContentId} />
+                  <ContentRow title={`Catalog: Movies (${movies.length.toLocaleString()})`} items={movieChunks[0]} onOpenDetail={setSelectedContentId} onPlay={handlePlayContentDirect} providerLabel="FMovies" />
                 )}
                 {tvChunks.length > 0 && (
-                  <ContentRow title={`Catalog: TV Shows (${tvShows.length.toLocaleString()})`} items={tvChunks[0]} onOpenDetail={setSelectedContentId} />
+                  <ContentRow title={`Catalog: TV Shows (${tvShows.length.toLocaleString()})`} items={tvChunks[0]} onOpenDetail={setSelectedContentId} onPlay={handlePlayContentDirect} providerLabel="FMovies" />
                 )}
               </>
             ) : activeTab === 'playlists' ? (

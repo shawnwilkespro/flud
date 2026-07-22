@@ -1,81 +1,135 @@
-import React from 'react';
-import { Play, Info, Globe } from 'lucide-react';
-import type { Video } from '../App';
-import { parseTags } from '../utils';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Play, Info, Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { Content } from './ContentRow';
 
 interface HeroBannerProps {
-  video: Video | null;
-  onPlay: (video: Video) => void;
-  onOpenDetails: (video: Video) => void;
+  items: Content[];
+  onPlay: (contentId: string) => void;
+  onOpenDetail: (contentId: string) => void;
 }
 
-const getDomain = (urlStr: string) => {
-  try {
-    const parsed = new URL(urlStr.startsWith('http') ? urlStr : `https://${urlStr}`);
-    return parsed.hostname.replace('www.', '');
-  } catch {
-    return 'web';
-  }
-};
+export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onPlay, onOpenDetail }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [bgError, setBgError] = useState(false);
 
-export const HeroBanner: React.FC<HeroBannerProps> = ({ video, onPlay, onOpenDetails }) => {
-  const [bgError, setBgError] = React.useState(false);
+  const current = items[activeIndex];
 
-  if (!video) return null;
+  // Auto-rotate every 8 seconds
+  useEffect(() => {
+    if (items.length <= 1) return;
+    const timer = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % items.length);
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [items.length]);
 
-  const tagsList = parseTags(video.tags);
+  // Reset bg error when slide changes
+  useEffect(() => {
+    setBgError(false);
+  }, [activeIndex]);
 
-  const fallbackBackdrop = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1600&q=80';
-  const backdropImage = (!bgError && video.cover_url) ? video.cover_url : fallbackBackdrop;
+  const goTo = useCallback((idx: number) => {
+    setActiveIndex(idx);
+  }, []);
+
+  const goPrev = useCallback(() => {
+    setActiveIndex((prev) => (prev - 1 + items.length) % items.length);
+  }, [items.length]);
+
+  const goNext = useCallback(() => {
+    setActiveIndex((prev) => (prev + 1) % items.length);
+  }, [items.length]);
+
+  if (!current) return null;
+
+  const genres: string[] = current.genres ? (() => { try { return JSON.parse(current.genres) as string[]; } catch { return []; } })() : [];
 
   return (
     <div className="hero-banner">
-      {/* Background Media */}
+      {/* Background poster */}
       <div className="hero-backdrop">
-        <img src={backdropImage} alt={video.title} onError={() => setBgError(true)} />
+        {current.poster_url && !bgError ? (
+          <img
+            src={current.poster_url}
+            alt={current.title}
+            onError={() => setBgError(true)}
+          />
+        ) : (
+          <div className="hero-backdrop-fallback" />
+        )}
         <div className="hero-vignette-top" />
         <div className="hero-vignette-bottom" />
         <div className="hero-vignette-left" />
       </div>
 
-      {/* Hero Content */}
+      {/* Content */}
       <div className="hero-content">
         <div className="hero-badge">
-          <Globe size={13} />
-          <span>{getDomain(video.page_url)}</span>
-          <span className="badge-divider">•</span>
-          <span className="badge-highlight">FEATURED BOOKMARK</span>
+          {current.rating && (
+            <>
+              <Star size={13} fill="currentColor" />
+              <span>{current.rating.toFixed(1)}</span>
+              <span className="badge-divider">·</span>
+            </>
+          )}
+          {current.year && (
+            <>
+              <span style={{ color: '#fff' }}>{current.year}</span>
+              <span className="badge-divider">·</span>
+            </>
+          )}
+          <span className="badge-highlight">FEATURED</span>
         </div>
 
-        <h1 className="hero-title">{video.title}</h1>
+        <h1 className="hero-title">{current.title}</h1>
 
-        {tagsList.length > 0 && (
+        {genres.length > 0 && (
           <div className="hero-tags">
-            {tagsList.map((tag: string, idx: number) => (
-              <span key={idx} className="hero-tag-pill">
-                #{tag}
-              </span>
+            {genres.slice(0, 4).map((g) => (
+              <span key={g} className="hero-tag-pill">{g}</span>
             ))}
           </div>
         )}
 
-        <p className="hero-description">
-          Stream directly inside your native Tauri webview shell. Click play to open the webpage in an isolated desktop window.
-        </p>
+        {current.synopsis && (
+          <p className="hero-description">{current.synopsis}</p>
+        )}
 
-        {/* Hero Actions */}
         <div className="hero-actions">
-          <button className="btn-hero-play" onClick={() => onPlay(video)}>
+          <button className="btn-hero-play" onClick={() => onPlay(current.id)}>
             <Play size={20} fill="currentColor" />
-            <span>Play Webview</span>
+            <span>Play</span>
           </button>
 
-          <button className="btn-hero-info" onClick={() => onOpenDetails(video)}>
+          <button className="btn-hero-info" onClick={() => onOpenDetail(current.id)}>
             <Info size={20} />
             <span>More Info</span>
           </button>
         </div>
       </div>
+
+      {/* Carousel navigation */}
+      {items.length > 1 && (
+        <>
+          <button className="hero-arrow hero-arrow-left" onClick={goPrev} aria-label="Previous">
+            <ChevronLeft size={32} />
+          </button>
+          <button className="hero-arrow hero-arrow-right" onClick={goNext} aria-label="Next">
+            <ChevronRight size={32} />
+          </button>
+
+          <div className="hero-indicators">
+            {items.map((_, idx) => (
+              <button
+                key={idx}
+                className={`hero-dot${idx === activeIndex ? ' active' : ''}`}
+                onClick={() => goTo(idx)}
+                aria-label={`Slide ${idx + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 };
