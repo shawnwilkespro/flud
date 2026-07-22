@@ -285,6 +285,11 @@ export default function App() {
     if (selectedVideoModal?.id === videoId) setSelectedVideoModal({ ...selectedVideoModal!, playlist_id: playlistId });
   };
 
+  const handleUpdateVideoCover = async (id: string, coverUrl: string) => {
+    await callTauri<void>('update_video_cover', { id, coverUrl });
+    setVideos((prev) => prev.map((v) => v.id === id ? { ...v, cover_url: coverUrl || null } : v));
+  };
+
   const handlePlayWebview = async (video: Video) => {
     const res = await callTauri<void>('open_video_player', { url: video.page_url, title: video.title, providerId: null });
     if (res === null) window.open(video.page_url, '_blank', 'noopener,noreferrer');
