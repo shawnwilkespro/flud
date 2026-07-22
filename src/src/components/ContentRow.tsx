@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { ChevronLeft, ChevronRight, Play, Film, Tv, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Film, Tv, Star, Info, Globe } from 'lucide-react';
 
 export interface Content {
   id: string;
@@ -16,11 +16,22 @@ export interface Content {
 interface ContentCardProps {
   item: Content;
   onOpenDetail: (id: string) => void;
+  onPlay?: (id: string) => void;
+  providerLabel?: string;
 }
 
-const ContentCard: React.FC<ContentCardProps> = ({ item, onOpenDetail }) => {
+const ContentCard: React.FC<ContentCardProps> = ({ item, onOpenDetail, onPlay, providerLabel }) => {
   const [imgError, setImgError] = React.useState(false);
   const isTV = item.media_type === 'tv_show';
+
+  const handlePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onPlay) {
+      onPlay(item.id);
+    } else {
+      onOpenDetail(item.id);
+    }
+  };
 
   return (
     <div className="row-card" onClick={() => onOpenDetail(item.id)}>
@@ -40,8 +51,8 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onOpenDetail }) => {
         <div className="card-play-overlay">
           <button
             className="card-play-btn"
-            onClick={(e) => { e.stopPropagation(); onOpenDetail(item.id); }}
-            title="View Sources"
+            onClick={handlePlay}
+            title="Play"
           >
             <Play size={20} fill="currentColor" />
           </button>
@@ -50,6 +61,12 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onOpenDetail }) => {
 
       <div className="card-meta">
         <div className="card-top-info">
+          {providerLabel && (
+            <span className="domain-pill">
+              <Globe size={11} />
+              {providerLabel}
+            </span>
+          )}
           {item.rating && (
             <span className="domain-pill" style={{ color: '#f5c518' }}>
               <Star size={11} fill="currentColor" />
@@ -66,10 +83,17 @@ const ContentCard: React.FC<ContentCardProps> = ({ item, onOpenDetail }) => {
         <div className="card-bottom-actions">
           <button
             className="card-action-btn primary"
-            onClick={(e) => { e.stopPropagation(); onOpenDetail(item.id); }}
+            onClick={handlePlay}
           >
             <Play size={14} fill="currentColor" />
-            <span>Sources</span>
+            <span>Play</span>
+          </button>
+          <button
+            className="card-action-btn secondary"
+            onClick={(e) => { e.stopPropagation(); onOpenDetail(item.id); }}
+            title="Details & Sources"
+          >
+            <Info size={14} />
           </button>
         </div>
       </div>
