@@ -20,10 +20,23 @@ export const MovieModal: React.FC<MovieModalProps> = ({
   onPlay,
   onDelete,
   onSetPlaylist,
+  onUpdateCover,
 }) => {
   const [bgError, setBgError] = React.useState(false);
+  const [editingCover, setEditingCover] = React.useState(false);
+  const [coverInput, setCoverInput] = React.useState('');
+  const [localCoverUrl, setLocalCoverUrl] = React.useState<string | null | undefined>(undefined);
 
   if (!video) return null;
+
+  const effectiveCoverUrl = localCoverUrl !== undefined ? localCoverUrl : video.cover_url;
+
+  const handleSaveCover = async () => {
+    await onUpdateCover(video.id, coverInput.trim());
+    setLocalCoverUrl(coverInput.trim() || null);
+    setBgError(false);
+    setEditingCover(false);
+  };
 
   const getDomain = (urlStr: string) => {
     try {
@@ -36,7 +49,7 @@ export const MovieModal: React.FC<MovieModalProps> = ({
   const tags = parseTags(video.tags);
   const domain = getDomain(video.page_url);
   const fallbackBackdrop = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80';
-  const backdropImage = (!bgError && video.cover_url) ? video.cover_url : fallbackBackdrop;
+  const backdropImage = (!bgError && effectiveCoverUrl) ? effectiveCoverUrl : fallbackBackdrop;
 
   return (
     <div className="netflix-modal-backdrop" onClick={onClose}>
@@ -115,6 +128,37 @@ export const MovieModal: React.FC<MovieModalProps> = ({
             </div>
 
             <div className="modal-info-right">
+              {/* Cover URL Editor */}
+              <div className="modal-setting-box">
+                <label className="setting-label">
+                  <Pencil size={15} />
+                  <span>Cover Image URL:</span>
+                </label>
+                {editingCover ? (
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      className="modal-select flex-1"
+                      type="text"
+                      value={coverInput}
+                      onChange={(e) => setCoverInput(e.target.value)}
+                      placeholder="https://..."
+                      autoFocus
+                    />
+                    <button className="btn-modal-play" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={handleSaveCover}>Save</button>
+                    <button className="btn-modal-external" style={{ padding: '0.4rem 0.8rem' }} onClick={() => setEditingCover(false)}>Cancel</button>
+                  </div>
+                ) : (
+                  <button
+                    className="btn-modal-external mt-1"
+                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.9rem' }}
+                    onClick={() => { setCoverInput(effectiveCoverUrl ?? ''); setEditingCover(true); }}
+                  >
+                    <Pencil size={13} />
+                    <span>Change Cover</span>
+                  </button>
+                )}
+              </div>
+
               {/* Playlist Selection */}
               <div className="modal-setting-box">
                 <label className="setting-label">
