@@ -1128,3 +1128,66 @@ body {
   color: var(--text-gray);
   font-size: 0.85rem;
 }
+
+/* Provider List */
+.provider-list-wrapper {
+  padding-bottom: 4rem;
+}
+
+.provider-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 1.5rem 4%;
+}
+
+.provider-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.provider-card.disabled {
+  opacity: 0.45;
+}
+
+.provider-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.provider-card-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  flex: 1;
+}
+
+.provider-toggle.on { color: #4ade80; }
+.provider-toggle.off { color: var(--text-gray); }
+
+.provider-card-url {
+  color: var(--text-gray);
+  font-size: 0.85rem;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.provider-card-url:hover { color: #fff; }
+
+.provider-card-mask {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-gray);
+}
+
+.mask-label {
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+}

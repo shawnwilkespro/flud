@@ -61,6 +61,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             Tags & Topics
           </button>
+          <button
+            className={`nav-link ${activeTab === 'providers' ? 'active' : ''}`}
+            onClick={() => setActiveTab('providers')}
+          >
+            Providers
+          </button>
         </div>
       </div>
 
