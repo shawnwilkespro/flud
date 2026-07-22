@@ -3,6 +3,7 @@ use sqlx::SqlitePool;
 
 mod commands;
 mod db;
+mod providers;
 
 pub struct AppState {
     pub db: SqlitePool,
@@ -24,6 +25,10 @@ pub fn run() {
             let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
             let pool = rt.block_on(db::init_db()).expect("DB init failed");
             handle.manage(AppState { db: pool });
+
+            // Load provider configs from core/providers/*/config.toml
+            let pool_ref = handle.state::<AppState>().db.clone();
+            rt.block_on(providers::load_all_providers(&pool_ref));
 
             Ok(())
         })

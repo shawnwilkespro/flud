@@ -1,0 +1,11 @@
+[provider]
+id       = "fmovies"
+name     = "FMovies"
+base_url = "https://fmoviess.org"
+enabled  = true
+
+[webview]
+mask_left   = 210
+mask_right  = 210
+mask_top    = 125
+mask_bottom = 35
