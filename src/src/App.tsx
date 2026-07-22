@@ -7,6 +7,10 @@ import { AddVideoModal } from './components/AddVideoModal';
 import { AddPlaylistModal } from './components/AddPlaylistModal';
 import { Sparkles, Film, Plus } from 'lucide-react';
 import { parseTags } from './utils';
+import { ContentRow } from './components/ContentRow';
+import type { Content } from './components/ContentRow';
+import { ContentLandingModal } from './components/ContentLandingModal';
+import { ProviderList } from './components/ProviderList';
 
 export interface Video {
   id: string;
@@ -99,6 +103,8 @@ export default function App() {
   const [isAddVideoOpen, setIsAddVideoOpen] = useState(false);
   const [isAddPlaylistOpen, setIsAddPlaylistOpen] = useState(false);
   const [selectedVideoModal, setSelectedVideoModal] = useState<Video | null>(null);
+  const [catalog, setCatalog] = useState<Content[]>([]);
+  const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
 
   // Refresh data from Tauri SQLite database or LocalStorage fallback
   const refreshData = async () => {
@@ -119,6 +125,12 @@ export default function App() {
       const savedP = localStorage.getItem('flud_netflix_playlists');
       setPlaylists(savedP ? JSON.parse(savedP) : DEMO_PLAYLISTS);
     }
+
+    const cList = await callTauri<Content[]>('list_content', {
+      search: searchQuery.trim() || null,
+    });
+    if (cList !== null) setCatalog(cList);
+
     setLoading(false);
   };
 
@@ -209,9 +221,25 @@ export default function App() {
   };
 
   const handlePlayWebview = async (video: Video) => {
-    const res = await callTauri<void>('open_video_player', { url: video.page_url, title: video.title });
+    const res = await callTauri<void>('open_video_player', {
+      url: video.page_url,
+      title: video.title,
+      providerId: null, // manual bookmarks have no provider
+    });
     if (res === null) {
       window.open(video.page_url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handlePlayContent = async (url: string, title: string, providerId: string) => {
+    setSelectedContentId(null);
+    const res = await callTauri<void>('open_video_player', {
+      url,
+      title,
+      providerId,
+    });
+    if (res === null) {
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -377,6 +405,24 @@ export default function App() {
                     />
                   );
                 })}
+
+                {/* Catalog: Movies from all providers */}
+                {catalog.filter((c) => c.media_type === 'movie').length > 0 && (
+                  <ContentRow
+                    title="Catalog: Movies"
+                    items={catalog.filter((c) => c.media_type === 'movie')}
+                    onOpenDetail={setSelectedContentId}
+                  />
+                )}
+
+                {/* Catalog: TV Shows from all providers */}
+                {catalog.filter((c) => c.media_type === 'tv_show').length > 0 && (
+                  <ContentRow
+                    title="Catalog: TV Shows"
+                    items={catalog.filter((c) => c.media_type === 'tv_show')}
+                    onOpenDetail={setSelectedContentId}
+                  />
+                )}
               </>
             ) : activeTab === 'playlists' ? (
               <>
@@ -413,6 +459,8 @@ export default function App() {
                   );
                 })}
               </>
+            ) : activeTab === 'providers' ? (
+              <ProviderList />
             ) : null}
           </>
         )}
@@ -426,6 +474,13 @@ export default function App() {
         onPlay={handlePlayWebview}
         onDelete={handleDeleteVideo}
         onSetPlaylist={handleSetVideoPlaylist}
+      />
+
+      {/* Content Landing Modal — catalog titles */}
+      <ContentLandingModal
+        contentId={selectedContentId}
+        onClose={() => setSelectedContentId(null)}
+        onPlay={handlePlayContent}
       />
 
       {/* Add Video Modal */}
