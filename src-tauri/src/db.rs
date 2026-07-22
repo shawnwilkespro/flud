@@ -20,6 +20,45 @@ pub struct Playlist {
     pub name: String,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
+pub struct Provider {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    pub mask_left: i32,
+    pub mask_right: i32,
+    pub mask_top: i32,
+    pub mask_bottom: i32,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
+pub struct Content {
+    pub id: String,
+    pub tmdb_id: Option<i64>,
+    pub title: String,
+    pub media_type: String, // "movie" | "tv_show"
+    pub synopsis: Option<String>,
+    pub poster_url: Option<String>,
+    pub year: Option<i32>,
+    pub genres: Option<String>, // JSON array string
+    pub rating: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentSource {
+    pub provider_id: String,
+    pub provider_name: String,
+    pub page_url: String,
+    pub season_number: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentDetail {
+    pub content: Content,
+    pub sources: Vec<ContentSource>,
+}
+
 pub async fn init_db() -> sqlx::Result<SqlitePool> {
     let mut path = dirs::data_dir().expect("Failed to get data dir");
     path.push("flud");
@@ -53,6 +92,55 @@ pub async fn init_db() -> sqlx::Result<SqlitePool> {
         CREATE TABLE IF NOT EXISTS playlists (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL
+        );
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS providers (
+            id          TEXT PRIMARY KEY,
+            name        TEXT NOT NULL,
+            base_url    TEXT NOT NULL,
+            mask_left   INTEGER NOT NULL DEFAULT 210,
+            mask_right  INTEGER NOT NULL DEFAULT 210,
+            mask_top    INTEGER NOT NULL DEFAULT 125,
+            mask_bottom INTEGER NOT NULL DEFAULT 35,
+            enabled     INTEGER NOT NULL DEFAULT 1
+        );
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS content (
+            id         TEXT PRIMARY KEY,
+            tmdb_id    INTEGER UNIQUE,
+            title      TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            synopsis   TEXT,
+            poster_url TEXT,
+            year       INTEGER,
+            genres     TEXT,
+            rating     REAL
+        );
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS provider_content (
+            id            TEXT PRIMARY KEY,
+            content_id    TEXT NOT NULL REFERENCES content(id),
+            provider_id   TEXT NOT NULL REFERENCES providers(id),
+            page_url      TEXT NOT NULL UNIQUE,
+            season_number INTEGER
         );
         "#,
     )
@@ -164,4 +252,112 @@ pub async fn db_set_video_playlist(
         .execute(pool)
         .await?;
     Ok(())
+}
+
+pub async fn db_upsert_provider(pool: &SqlitePool, p: &Provider) -> sqlx::Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO providers (id, name, base_url, mask_left, mask_right, mask_top, mask_bottom, enabled)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        ON CONFLICT(id) DO UPDATE SET
+            name        = excluded.name,
+            base_url    = excluded.base_url,
+            mask_left   = excluded.mask_left,
+            mask_right  = excluded.mask_right,
+            mask_top    = excluded.mask_top,
+            mask_bottom = excluded.mask_bottom,
+            enabled     = excluded.enabled
+        "#,
+    )
+    .bind(&p.id)
+    .bind(&p.name)
+    .bind(&p.base_url)
+    .bind(p.mask_left)
+    .bind(p.mask_right)
+    .bind(p.mask_top)
+    .bind(p.mask_bottom)
+    .bind(p.enabled as i32)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn db_list_providers(pool: &SqlitePool) -> sqlx::Result<Vec<Provider>> {
+    sqlx::query_as::<_, Provider>(
+        "SELECT id, name, base_url, mask_left, mask_right, mask_top, mask_bottom, enabled FROM providers ORDER BY name ASC"
+    )
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn db_get_provider(pool: &SqlitePool, id: &str) -> sqlx::Result<Option<Provider>> {
+    sqlx::query_as::<_, Provider>(
+        "SELECT id, name, base_url, mask_left, mask_right, mask_top, mask_bottom, enabled FROM providers WHERE id = ?1"
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn db_list_content(
+    pool: &SqlitePool,
+    search: Option<&str>,
+) -> sqlx::Result<Vec<Content>> {
+    match search {
+        Some(q) => {
+            let like = format!("%{}%", q);
+            sqlx::query_as::<_, Content>(
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content WHERE title LIKE ?1 ORDER BY title ASC LIMIT 500"
+            )
+            .bind(like)
+            .fetch_all(pool)
+            .await
+        }
+        None => {
+            sqlx::query_as::<_, Content>(
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content ORDER BY title ASC LIMIT 500"
+            )
+            .fetch_all(pool)
+            .await
+        }
+    }
+}
+
+pub async fn db_get_content_detail(
+    pool: &SqlitePool,
+    content_id: &str,
+) -> sqlx::Result<Option<ContentDetail>> {
+    let content = sqlx::query_as::<_, Content>(
+        "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, year, genres, rating FROM content WHERE id = ?1"
+    )
+    .bind(content_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(content) = content else {
+        return Ok(None);
+    };
+
+    let sources = sqlx::query_as::<_, (String, String, String, Option<i32>)>(
+        r#"
+        SELECT pc.provider_id, p.name, pc.page_url, pc.season_number
+        FROM provider_content pc
+        JOIN providers p ON p.id = pc.provider_id
+        WHERE pc.content_id = ?1
+        ORDER BY pc.season_number ASC NULLS LAST, p.name ASC
+        "#,
+    )
+    .bind(content_id)
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|(provider_id, provider_name, page_url, season_number)| ContentSource {
+        provider_id,
+        provider_name,
+        page_url,
+        season_number,
+    })
+    .collect();
+
+    Ok(Some(ContentDetail { content, sources }))
 }
