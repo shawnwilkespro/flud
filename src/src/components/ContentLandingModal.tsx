@@ -137,7 +137,7 @@ export const ContentLandingModal: React.FC<ContentLandingModalProps> = ({
                     ) : (
                       sources.map((src) => (
                         <button
-                          key={src.provider_id}
+                          key={src.page_url}
                           className="btn-netflix-primary source-btn"
                           onClick={() => onPlay(src.page_url, content.title, src.provider_id)}
                         >
