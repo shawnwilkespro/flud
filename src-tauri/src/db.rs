@@ -61,6 +61,18 @@ pub struct ContentDetail {
     pub sources: Vec<ContentSource>,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
+pub struct Episode {
+    pub id: String,
+    pub content_id: String,
+    pub provider_id: String,
+    pub season_number: i32,
+    pub episode_number: i32,
+    pub title: Option<String>,
+    pub page_url: String,
+    pub fetched_at: i64,
+}
+
 pub async fn init_db() -> sqlx::Result<SqlitePool> {
     let mut path = dirs::data_dir().expect("Failed to get data dir");
     path.push("flud");
@@ -173,6 +185,23 @@ pub async fn init_db() -> sqlx::Result<SqlitePool> {
             content_id  TEXT NOT NULL REFERENCES content(id),
             playlist_id TEXT NOT NULL REFERENCES playlists(id),
             PRIMARY KEY (content_id, playlist_id)
+        );
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS episodes (
+            id             TEXT PRIMARY KEY,
+            content_id     TEXT NOT NULL REFERENCES content(id),
+            provider_id    TEXT NOT NULL,
+            season_number  INTEGER NOT NULL,
+            episode_number INTEGER NOT NULL,
+            title          TEXT,
+            page_url       TEXT NOT NULL,
+            fetched_at     INTEGER NOT NULL
         );
         "#,
     )
@@ -517,4 +546,65 @@ pub async fn db_get_content_playlist(
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|(pid,)| pid))
+}
+
+pub async fn db_upsert_episodes(
+    pool: &SqlitePool,
+    episodes: &[Episode],
+) -> sqlx::Result<()> {
+    if episodes.is_empty() {
+        return Ok(());
+    }
+    let first = &episodes[0];
+    let mut tx = pool.begin().await?;
+    sqlx::query(
+        "DELETE FROM episodes WHERE content_id = ?1 AND provider_id = ?2 AND season_number = ?3",
+    )
+    .bind(&first.content_id)
+    .bind(&first.provider_id)
+    .bind(first.season_number)
+    .execute(&mut *tx)
+    .await?;
+    for ep in episodes {
+        sqlx::query(
+            r#"
+            INSERT INTO episodes
+                (id, content_id, provider_id, season_number, episode_number, title, page_url, fetched_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "#,
+        )
+        .bind(&ep.id)
+        .bind(&ep.content_id)
+        .bind(&ep.provider_id)
+        .bind(ep.season_number)
+        .bind(ep.episode_number)
+        .bind(&ep.title)
+        .bind(&ep.page_url)
+        .bind(ep.fetched_at)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn db_get_episodes(
+    pool: &SqlitePool,
+    content_id: &str,
+    provider_id: &str,
+    season_number: i32,
+) -> sqlx::Result<Vec<Episode>> {
+    sqlx::query_as::<_, Episode>(
+        r#"
+        SELECT id, content_id, provider_id, season_number, episode_number, title, page_url, fetched_at
+        FROM episodes
+        WHERE content_id = ?1 AND provider_id = ?2 AND season_number = ?3
+        ORDER BY episode_number ASC
+        "#,
+    )
+    .bind(content_id)
+    .bind(provider_id)
+    .bind(season_number)
+    .fetch_all(pool)
+    .await
 }
