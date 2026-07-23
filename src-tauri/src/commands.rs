@@ -14,6 +14,8 @@ use crate::db::{
     db_update_content_cover,
     db_list_recent_content,
     db_list_content_by_genre,
+    db_set_content_playlist,
+    db_get_content_playlist,
 };
 use crate::db;
 
@@ -136,10 +138,10 @@ pub async fn open_video_player(
                 // Force left/right to 0 (horizontal strip format), keep top/bottom as is
                 (0, 0, p.mask_top, p.mask_bottom)
             },
-            _ => (0, 0, 125, 35),
+            _ => (0, 0, 95, 35),
         }
     } else {
-        (0, 0, 125, 35)
+        (0, 0, 95, 35)
     };
 
     let hole_js = format!(
@@ -304,7 +306,7 @@ pub async fn open_video_player(
 
                 var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
                 svg.id = '__flud_overlay__';
-                svg.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:2147483647;pointer-events:none;';
+                svg.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:2147483647;pointer-events:none;display:block;';
                 svg.setAttribute('preserveAspectRatio', 'none');
                 svg.innerHTML = [
                     '<defs><mask id="__flud_mask__">',
@@ -348,7 +350,7 @@ pub async fn open_video_player(
 
                 var nav = document.createElement('div');
                 nav.id = '__flud_nav__';
-                nav.style.cssText = 'position:fixed;top:0;left:0;right:0;height:125px;z-index:2147483648;display:flex;align-items:center;justify-content:space-between;padding:0 28px;pointer-events:all;box-sizing:border-box;opacity:1;transition:opacity 0.3s ease;background:linear-gradient(180deg,rgba(0,0,0,0.8) 0%,rgba(0,0,0,0) 100%);';
+                nav.style.cssText = 'position:fixed;top:0;left:0;right:0;height:95px;z-index:2147483648;display:flex;align-items:center;justify-content:space-between;padding:0 28px;pointer-events:all;box-sizing:border-box;opacity:1;transition:opacity 0.3s ease;background:linear-gradient(180deg,rgba(0,0,0,0.8) 0%,rgba(0,0,0,0) 100%);';
                 nav.innerHTML =
                     '<div class="__fn_brand" id="__flud_n_brand" style="display:flex;align-items:center;gap:10px;cursor:pointer;flex-shrink:0;">' + _fludLogo +
                     '<span style="font-family:\'Plus Jakarta Sans\',system-ui,-apple-system,sans-serif;font-size:1.35rem;font-weight:900;letter-spacing:-0.03em;color:#fff;">FLUD</span></div>' +
@@ -417,65 +419,37 @@ pub async fn open_video_player(
                 });
             }
 
-            // Hide overlay + navbar on play/fullscreen; restore on pause/end/exit.
-            function _hideFludUI() {
-                var nav     = document.getElementById('__flud_nav__');
+            // Mask always visible; navbar shows/hides on mouseover
+            var _navHideTimer = null;
+
+            function _hideNavbarOnly() {
+                var nav = document.getElementById('__flud_nav__');
+                if (nav) nav.style.display = 'none';
+            }
+            function _showNavbarOnly() {
+                clearTimeout(_navHideTimer);
+                var nav = document.getElementById('__flud_nav__');
+                if (nav) nav.style.display = 'flex';
+                _navHideTimer = setTimeout(_hideNavbarOnly, 2500);
+            }
+
+            // Hide navbar immediately on page load, keep mask visible
+            setTimeout(function() {
+                _hideNavbarOnly();
+            }, 500);
+
+            // Mousemove anywhere on screen: if mouse is near top, show navbar temporarily
+            document.addEventListener('mousemove', function(e) {
+                if (e.clientY < 150) {
+                    _showNavbarOnly();
+                }
+            });
+
+            // Hide mask overlay after 10 seconds
+            setTimeout(function() {
                 var overlay = document.getElementById('__flud_overlay__');
-                if (nav)     nav.style.display     = 'none';
                 if (overlay) overlay.style.display = 'none';
-            }
-            function _showFludUI() {
-                var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                if (isFS) return;
-                var nav     = document.getElementById('__flud_nav__');
-                var overlay = document.getElementById('__flud_overlay__');
-                if (nav)     nav.style.display     = 'flex';
-                if (overlay) overlay.style.display = '';
-            }
-
-            // Signal 1: capture-phase media events (catches non-bubbling video events).
-            document.addEventListener('play',  function(e) {
-                if (e.target && e.target.tagName === 'VIDEO') { _hideFludUI(); }
-            }, true);
-            document.addEventListener('pause', function(e) {
-                if (e.target && e.target.tagName === 'VIDEO') { _showFludUI(); }
-            }, true);
-            document.addEventListener('ended', function(e) {
-                if (e.target && e.target.tagName === 'VIDEO') { _showFludUI(); }
-            }, true);
-
-            // Signal 2: native Fullscreen API changes (F key, native fullscreen button).
-            document.addEventListener('fullscreenchange', function() {
-                var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                if (isFS) { _hideFludUI(); } else { _showFludUI(); }
-            });
-            document.addEventListener('webkitfullscreenchange', function() {
-                var isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                if (isFS) { _hideFludUI(); } else { _showFludUI(); }
-            });
-
-            // Signal 3: ResizeObserver on video elements — catches CSS/custom fullscreen.
-            // Many players fake fullscreen by resizing the player element with CSS,
-            // never calling requestFullscreen(), so fullscreenchange never fires.
-            // When the video covers >= 85% of the viewport, hide the UI.
-            function _watchVideoSize(video) {
-                if (video.__flud_ro__) return;
-                var ro = new ResizeObserver(function() {
-                    var r = video.getBoundingClientRect();
-                    var large = r.width  >= window.innerWidth  * 0.85 &&
-                                r.height >= window.innerHeight * 0.85;
-                    if (large) { _hideFludUI(); } else { _showFludUI(); }
-                });
-                ro.observe(video);
-                video.__flud_ro__ = ro;
-            }
-            function _scanForVideos() {
-                document.querySelectorAll('video').forEach(_watchVideoSize);
-            }
-            _scanForVideos();
-            // Watch for video elements added dynamically (SPA page loads, lazy embeds).
-            var _videoMO = new MutationObserver(_scanForVideos);
-            _videoMO.observe(document.documentElement, { childList: true, subtree: true });
+            }, 10000);
 
             if (document.body) {
                 _injectOverlay();
@@ -590,4 +564,51 @@ pub async fn list_content_by_genre(
     db_list_content_by_genre(&state.db, &genre, media_type.as_deref(), limit.unwrap_or(48), offset.unwrap_or(0))
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn open_in_browser(url: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {}", e))?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", &url])
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_content_playlist(
+    state: tauri::State<'_, AppState>,
+    content_id: String,
+    playlist_id: Option<String>,
+) -> Result<(), String> {
+    db_set_content_playlist(&state.db, &content_id, playlist_id.as_deref())
+        .await
+        .map_err(|e| format!("Set content playlist failed: {}", e))
+}
+
+#[tauri::command]
+pub async fn get_content_playlist(
+    state: tauri::State<'_, AppState>,
+    content_id: String,
+) -> Result<Option<String>, String> {
+    db_get_content_playlist(&state.db, &content_id)
+        .await
+        .map_err(|e| format!("Get content playlist failed: {}", e))
 }
