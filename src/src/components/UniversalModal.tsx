@@ -121,13 +121,9 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
     }
   };
 
-  const handlePlayUrl = async (url: string, label: string, providerId: string | null, isFMovies: boolean) => {
-    if (isFMovies) {
-      await callTauri<void>('open_in_browser', { url });
-    } else {
-      const res = await callTauri<void>('open_video_player', { url, title: label, providerId });
-      if (res === null) window.open(url, '_blank', 'noopener,noreferrer');
-    }
+  const handlePlayUrl = async (url: string, label: string, providerId: string | null) => {
+    const res = await callTauri<void>('open_video_player', { url, title: label, providerId });
+    if (res === null) window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleExternalLink = async () => {
@@ -231,19 +227,16 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
             {/* Action bar */}
             <div className="um-actions">
               {/* Catalog movie: one button per unique provider */}
-              {isContent && !isTV && uniqueProviders.map((src) => {
-                const isFMovies = src.provider_name.toLowerCase().includes('fmovies');
-                return (
-                  <button
-                    key={src.provider_id}
-                    className="btn-modal-play"
-                    onClick={() => handlePlayUrl(src.page_url, item.data.title, src.provider_id, isFMovies)}
-                  >
-                    <Play size={15} fill="currentColor" />
-                    <span>{isFMovies ? 'Watch · FMovies' : `Watch · ${src.provider_name}`}</span>
-                  </button>
-                );
-              })}
+              {isContent && !isTV && uniqueProviders.map((src) => (
+                <button
+                  key={src.provider_id}
+                  className="btn-modal-play"
+                  onClick={() => handlePlayUrl(src.page_url, item.data.title, src.provider_id)}
+                >
+                  <Play size={15} fill="currentColor" />
+                  <span>Watch · {src.provider_name}</span>
+                </button>
+              ))}
 
               {/* Catalog TV: choose season dropdown */}
               {isContent && isTV && (
@@ -262,7 +255,6 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
                         <div className="um-dropdown-empty">No seasons available</div>
                       ) : (
                         item.sources.map((src) => {
-                          const isFMovies = src.provider_name.toLowerCase().includes('fmovies');
                           const label = src.season_number != null
                             ? `${item.data.title} S${src.season_number}`
                             : item.data.title;
@@ -272,7 +264,7 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
                               className="um-dropdown-item"
                               onClick={() => {
                                 setSeasonDropdownOpen(false);
-                                handlePlayUrl(src.page_url, label, src.provider_id, isFMovies);
+                                handlePlayUrl(src.page_url, label, src.provider_id);
                               }}
                             >
                               <span>{src.season_number != null ? `Season ${src.season_number}` : 'Full Series'}</span>
@@ -290,7 +282,7 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
               {isVideo && (
                 <button
                   className="btn-modal-play"
-                  onClick={() => handlePlayUrl(item.data.page_url, item.data.title, null, false)}
+                  onClick={() => handlePlayUrl(item.data.page_url, item.data.title, null)}
                 >
                   <Play size={15} fill="currentColor" />
                   <span>Play Webview</span>
