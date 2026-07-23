@@ -1259,3 +1259,259 @@ body {
   font-weight: 600;
   color: rgba(255,255,255,0.5);
 }
+
+/* ── UniversalModal ─────────────────────────────────── */
+.um-card {
+  position: relative;
+  background: var(--netflix-dark-card);
+  width: 100%;
+  max-width: 860px;
+  border-radius: 12px;
+  overflow: hidden;
+  max-height: 88vh;
+  overflow-y: auto;
+  animation: fadeIn 0.2s ease;
+}
+
+.um-hero {
+  position: relative;
+  height: 240px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.um-hero-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(14px) brightness(0.4);
+  transform: scale(1.14);
+}
+
+.um-hero-bg--gradient {
+  background: linear-gradient(135deg, #0f0f1a 0%, #1a0a2e 50%, #0d1117 100%);
+  filter: none;
+  transform: none;
+}
+
+.um-hero-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 30%, var(--netflix-dark-card) 100%);
+}
+
+.um-info-row {
+  display: flex;
+  gap: 1.5rem;
+  padding: 0 2rem;
+  margin-top: -68px;
+  position: relative;
+  z-index: 2;
+  align-items: flex-start;
+}
+
+/* Poster wrapper: fixed width, holds either poster or cover editor */
+.um-poster-wrapper {
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.um-poster {
+  width: 120px;
+  height: 180px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1a1a2e;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.65);
+}
+
+.um-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.um-poster-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-gray);
+}
+
+.um-poster-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  color: #fff;
+}
+
+.um-poster:hover .um-poster-overlay {
+  opacity: 1;
+}
+
+.um-cover-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 4px;
+}
+
+.um-cover-editor-label {
+  font-size: 0.75rem;
+  color: var(--text-gray);
+  margin: 0;
+}
+
+.um-cover-editor-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* Meta column: title, meta row, actions */
+.um-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  padding-top: 72px;
+}
+
+.um-title {
+  font-size: 1.55rem;
+  font-weight: 800;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.um-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--text-gray);
+}
+
+.um-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* Shared dropdown wrapper */
+.um-dropdown-wrapper {
+  position: relative;
+}
+
+.um-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: #1e1e2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.35rem;
+  z-index: 200;
+  min-width: 190px;
+  max-height: 260px;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+}
+
+.um-dropdown-menu--right {
+  left: auto;
+  right: 0;
+}
+
+.um-dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  background: none;
+  border: none;
+  color: #e5e5e5;
+  font-size: 0.83rem;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+  gap: 0.5rem;
+}
+
+.um-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.um-dropdown-item--active {
+  color: var(--netflix-red);
+  font-weight: 600;
+}
+
+.um-dropdown-sub {
+  color: var(--text-gray);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.um-dropdown-empty {
+  padding: 0.5rem 0.75rem;
+  color: var(--text-gray);
+  font-size: 0.82rem;
+}
+
+/* Playlist button — may show playlist name badge */
+.um-playlist-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.um-playlist-label {
+  font-size: 0.75rem;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Body */
+.um-body {
+  padding: 1.25rem 2rem 1rem;
+}
+
+.um-synopsis {
+  color: var(--text-gray);
+  line-height: 1.65;
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.um-url {
+  color: var(--text-gray);
+  font-size: 0.83rem;
+  margin: 0;
+  word-break: break-all;
+}
+
+/* Footer */
+.um-footer {
+  padding: 0.25rem 2rem 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+}
