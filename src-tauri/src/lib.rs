@@ -53,6 +53,8 @@ pub fn run() {
             commands::open_in_browser,
             commands::set_content_playlist,
             commands::get_content_playlist,
+            commands::fetch_episodes,
+            commands::get_cached_episodes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

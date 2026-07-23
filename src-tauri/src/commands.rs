@@ -16,8 +16,11 @@ use crate::db::{
     db_list_content_by_genre,
     db_set_content_playlist,
     db_get_content_playlist,
+    db_upsert_episodes,
+    db_get_episodes,
 };
 use crate::db;
+use scraper::{Html, Selector};
 
 #[tauri::command]
 pub async fn add_video(
@@ -611,4 +614,143 @@ pub async fn get_content_playlist(
     db_get_content_playlist(&state.db, &content_id)
         .await
         .map_err(|e| format!("Get content playlist failed: {}", e))
+}
+
+fn scrape_episodes(
+    html: &str,
+    content_id: &str,
+    provider_id: &str,
+    season_number: i32,
+    base_url: &str,
+) -> Vec<crate::db::Episode> {
+    let document = Html::parse_document(html);
+    let now = chrono::Utc::now().timestamp();
+
+    const SELECTORS: &[&str] = &[
+        "ul.episodes a",
+        ".ep-list a",
+        ".episodes-list a",
+        ".episodes a",
+        "a[href*='episode']",
+    ];
+
+    for sel_str in SELECTORS {
+        let Ok(selector) = Selector::parse(sel_str) else {
+            continue;
+        };
+        let links: Vec<_> = document.select(&selector).collect();
+        if links.is_empty() {
+            continue;
+        }
+
+        let mut episodes: Vec<crate::db::Episode> = links
+            .iter()
+            .filter_map(|el| {
+                let href = el.value().attr("href")?;
+                // Parse episode number from URL path segment "episode-N"
+                let episode_number = href.split('/').find_map(|seg| {
+                    seg.strip_prefix("episode-")
+                        .and_then(|n| n.parse::<i32>().ok())
+                })?;
+                // Build absolute URL
+                let page_url = if href.starts_with("http") {
+                    href.to_string()
+                } else {
+                    format!(
+                        "{}/{}",
+                        base_url.trim_end_matches('/'),
+                        href.trim_start_matches('/')
+                    )
+                };
+                // Extract title text
+                let text = el.text().collect::<String>();
+                let text = text.trim().to_string();
+                let title = if text.is_empty() { None } else { Some(text) };
+
+                let id = format!(
+                    "{}:{}:s{}:e{}",
+                    provider_id, content_id, season_number, episode_number
+                );
+
+                Some(crate::db::Episode {
+                    id,
+                    content_id: content_id.to_string(),
+                    provider_id: provider_id.to_string(),
+                    season_number,
+                    episode_number,
+                    title,
+                    page_url,
+                    fetched_at: now,
+                })
+            })
+            .collect();
+
+        if !episodes.is_empty() {
+            episodes.sort_by_key(|ep| ep.episode_number);
+            episodes.dedup_by_key(|ep| ep.episode_number);
+            return episodes;
+        }
+    }
+
+    vec![]
+}
+
+#[tauri::command]
+pub async fn fetch_episodes(
+    state: tauri::State<'_, AppState>,
+    content_id: String,
+    provider_id: String,
+    season_number: i32,
+    season_url: String,
+) -> Result<Vec<crate::db::Episode>, String> {
+    let client = reqwest::Client::new();
+    let html = client
+        .get(&season_url)
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+             AppleWebKit/537.36 (KHTML, like Gecko) \
+             Chrome/120.0.0.0 Safari/537.36",
+        )
+        .send()
+        .await
+        .map_err(|e| format!("Fetch failed: {}", e))?
+        .text()
+        .await
+        .map_err(|e| format!("Body read failed: {}", e))?;
+
+    // Extract scheme://host for resolving relative hrefs
+    let base_url = if let Some(rest) = season_url.strip_prefix("https://") {
+        let host = rest.split('/').next().unwrap_or("");
+        format!("https://{}", host)
+    } else if let Some(rest) = season_url.strip_prefix("http://") {
+        let host = rest.split('/').next().unwrap_or("");
+        format!("http://{}", host)
+    } else {
+        String::new()
+    };
+
+    let episodes = scrape_episodes(&html, &content_id, &provider_id, season_number, &base_url);
+
+    if episodes.is_empty() {
+        return Err("No episodes found — site structure may have changed".to_string());
+    }
+
+    db_upsert_episodes(&state.db, &episodes)
+        .await
+        .map_err(|e| format!("DB error: {}", e))?;
+
+    Ok(episodes)
+}
+
+#[tauri::command]
+pub async fn get_cached_episodes(
+    state: tauri::State<'_, AppState>,
+    content_id: String,
+    provider_id: String,
+    season_number: i32,
+) -> Result<Vec<crate::db::Episode>, String> {
+    db_get_episodes(&state.db, &content_id, &provider_id, season_number)
+        .await
+        .map_err(|e| e.to_string())
 }
