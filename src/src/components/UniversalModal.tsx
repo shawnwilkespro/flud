@@ -144,51 +144,65 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
     if (!isContent) return;
     setEpisodesLoading(true);
     setEpisodesError(null);
-    const cached = await callTauri<Episode[]>('get_cached_episodes', {
-      contentId: item.data.id,
-      providerId: src.provider_id,
-      seasonNumber: src.season_number ?? 1,
-    });
-    if (cached && cached.length > 0) {
-      setEpisodes(cached);
-      setEpisodesLoading(false);
-      return;
+    const { invoke } = await import('@tauri-apps/api/core');
+    try {
+      const cached = await invoke<Episode[]>('get_cached_episodes', {
+        contentId: item.data.id,
+        providerId: src.provider_id,
+        seasonNumber: src.season_number ?? 1,
+      });
+      if (cached.length > 0) {
+        setEpisodes(cached);
+        setEpisodesLoading(false);
+        return;
+      }
+    } catch {
+      // Cache miss — fall through to fetch
     }
-    const fetched = await callTauri<Episode[]>('fetch_episodes', {
-      contentId: item.data.id,
-      providerId: src.provider_id,
-      seasonNumber: src.season_number ?? 1,
-      seasonUrl: src.page_url,
-    });
-    if (fetched && fetched.length > 0) {
-      setEpisodes(fetched);
-    } else {
-      setEpisodesError('No episodes found — try refreshing or check the site.');
+    try {
+      const fetched = await invoke<Episode[]>('fetch_episodes', {
+        contentId: item.data.id,
+        providerId: src.provider_id,
+        seasonNumber: src.season_number ?? 1,
+        seasonUrl: src.page_url,
+      });
+      if (fetched.length > 0) {
+        setEpisodes(fetched);
+      } else {
+        setEpisodesError('No episodes found — site structure may have changed.');
+      }
+    } catch (err) {
+      setEpisodesError(typeof err === 'string' ? err : 'Failed to fetch episodes.');
     }
     setEpisodesLoading(false);
   };
 
-  const handleSelectSeason = (src: ContentSource) => {
+  const handleSelectSeason = async (src: ContentSource) => {
     setSelectedSeason(src);
     setSeasonDropdownOpen(false);
     setEpisodes([]);
-    loadEpisodes(src);
+    await loadEpisodes(src);
   };
 
   const handleRefreshEpisodes = async () => {
     if (!selectedSeason || !isContent) return;
     setEpisodesLoading(true);
     setEpisodesError(null);
-    const fetched = await callTauri<Episode[]>('fetch_episodes', {
-      contentId: item.data.id,
-      providerId: selectedSeason.provider_id,
-      seasonNumber: selectedSeason.season_number ?? 1,
-      seasonUrl: selectedSeason.page_url,
-    });
-    if (fetched && fetched.length > 0) {
-      setEpisodes(fetched);
-    } else {
-      setEpisodesError('No episodes found — site structure may have changed.');
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const fetched = await invoke<Episode[]>('fetch_episodes', {
+        contentId: item.data.id,
+        providerId: selectedSeason.provider_id,
+        seasonNumber: selectedSeason.season_number ?? 1,
+        seasonUrl: selectedSeason.page_url,
+      });
+      if (fetched.length > 0) {
+        setEpisodes(fetched);
+      } else {
+        setEpisodesError('No episodes found — site structure may have changed.');
+      }
+    } catch (err) {
+      setEpisodesError(typeof err === 'string' ? err : 'Failed to fetch episodes.');
     }
     setEpisodesLoading(false);
   };
