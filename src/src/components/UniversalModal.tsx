@@ -132,9 +132,8 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
 
   const handleExternalLink = async () => {
     const url = isContent ? (item.sources[0]?.page_url ?? '') : item.data.page_url;
-    await callTauri<void>('open_in_browser', { url });
     if (!url) return;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    await callTauri<void>('open_in_browser', { url });
   };
 
   const currentPlaylistName = playlists.find((pl) => pl.id === playlistId)?.name ?? null;
@@ -179,15 +178,13 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
                 />
                 <div className="um-cover-editor-actions">
                   <button
-                    className="btn-netflix-primary"
-                    style={{ fontSize: '0.78rem', padding: '0.35rem 0.8rem' }}
+                    className="btn-netflix-primary um-cover-editor-btn"
                     onClick={handleSaveCover}
                   >
                     Save
                   </button>
                   <button
-                    className="btn-netflix-secondary"
-                    style={{ fontSize: '0.78rem', padding: '0.35rem 0.8rem' }}
+                    className="btn-netflix-secondary um-cover-editor-btn"
                     onClick={() => setEditingCover(false)}
                   >
                     Cancel
@@ -362,10 +359,10 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
                   const tags = JSON.parse(item.data.tags ?? '[]') as string[];
                   if (tags.length === 0) return null;
                   return (
-                    <div className="modal-tags-container" style={{ marginTop: '0.75rem' }}>
+                    <div className="modal-tags-container um-tags-section">
                       <span className="modal-section-label">Tags:</span>
                       <div className="modal-tags-list">
-                        {tags.map((t, i) => <span key={i} className="modal-tag-chip">#{t}</span>)}
+                        {tags.map((t) => <span key={t} className="modal-tag-chip">#{t}</span>)}
                       </div>
                     </div>
                   );

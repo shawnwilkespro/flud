@@ -1379,6 +1379,15 @@ body {
   flex-wrap: wrap;
 }
 
+.um-cover-editor-btn {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.8rem;
+}
+
+.um-tags-section {
+  margin-top: 0.75rem;
+}
+
 /* Meta column: title, meta row, actions */
 .um-meta {
   flex: 1;
