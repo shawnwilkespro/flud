@@ -108,7 +108,7 @@ pub async fn init_db() -> sqlx::Result<SqlitePool> {
             base_url    TEXT NOT NULL,
             mask_left   INTEGER NOT NULL DEFAULT 0,
             mask_right  INTEGER NOT NULL DEFAULT 0,
-            mask_top    INTEGER NOT NULL DEFAULT 125,
+            mask_top    INTEGER NOT NULL DEFAULT 95,
             mask_bottom INTEGER NOT NULL DEFAULT 35,
             enabled     INTEGER NOT NULL DEFAULT 1
         );
@@ -161,6 +161,18 @@ pub async fn init_db() -> sqlx::Result<SqlitePool> {
             provider_id   TEXT NOT NULL REFERENCES providers(id),
             page_url      TEXT NOT NULL UNIQUE,
             season_number INTEGER
+        );
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS content_playlists (
+            content_id  TEXT NOT NULL REFERENCES content(id),
+            playlist_id TEXT NOT NULL REFERENCES playlists(id),
+            PRIMARY KEY (content_id, playlist_id)
         );
         "#,
     )
@@ -471,4 +483,38 @@ pub async fn db_update_content_cover(
         .execute(pool)
         .await?;
     Ok(())
+}
+
+pub async fn db_set_content_playlist(
+    pool: &SqlitePool,
+    content_id: &str,
+    playlist_id: Option<&str>,
+) -> sqlx::Result<()> {
+    sqlx::query("DELETE FROM content_playlists WHERE content_id = ?1")
+        .bind(content_id)
+        .execute(pool)
+        .await?;
+    if let Some(pid) = playlist_id {
+        sqlx::query(
+            "INSERT INTO content_playlists (content_id, playlist_id) VALUES (?1, ?2)",
+        )
+        .bind(content_id)
+        .bind(pid)
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
+}
+
+pub async fn db_get_content_playlist(
+    pool: &SqlitePool,
+    content_id: &str,
+) -> sqlx::Result<Option<String>> {
+    let row = sqlx::query_as::<_, (String,)>(
+        "SELECT playlist_id FROM content_playlists WHERE content_id = ?1 LIMIT 1",
+    )
+    .bind(content_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(pid,)| pid))
 }
