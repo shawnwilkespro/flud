@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Play, ExternalLink, Trash2, Pencil, Star, Tv, Film, ChevronDown, ListPlus } from 'lucide-react';
+import { X, Play, ExternalLink, Trash2, Pencil, Star, Tv, Film, ChevronDown, ListPlus, RefreshCw } from 'lucide-react';
 import type { Content } from './ContentRow';
 import type { Video, Playlist } from '../App';
 
@@ -8,6 +8,17 @@ interface ContentSource {
   provider_name: string;
   page_url: string;
   season_number?: number | null;
+}
+
+interface Episode {
+  id: string;
+  content_id: string;
+  provider_id: string;
+  season_number: number;
+  episode_number: number;
+  title: string | null;
+  page_url: string;
+  fetched_at: number;
 }
 
 export type ModalItem =
@@ -49,6 +60,10 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
   const [playlistId, setPlaylistId] = useState<string | null>(null);
   const [seasonDropdownOpen, setSeasonDropdownOpen] = useState(false);
   const [playlistDropdownOpen, setPlaylistDropdownOpen] = useState(false);
+  const [selectedSeason, setSelectedSeason] = useState<ContentSource | null>(null);
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [episodesLoading, setEpisodesLoading] = useState(false);
+  const [episodesError, setEpisodesError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!item) return;
@@ -57,6 +72,10 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
     setLocalCoverUrl(undefined);
     setSeasonDropdownOpen(false);
     setPlaylistDropdownOpen(false);
+    setSelectedSeason(null);
+    setEpisodes([]);
+    setEpisodesLoading(false);
+    setEpisodesError(null);
 
     if (item.kind === 'video') {
       setPlaylistId(item.data.playlist_id ?? null);
@@ -119,6 +138,59 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
       await callTauri<void>('set_video_playlist', { videoId: item.data.id, playlistId: pid });
       if (onVideoUpdated) await onVideoUpdated(item.data.id);
     }
+  };
+
+  const loadEpisodes = async (src: ContentSource) => {
+    if (!isContent) return;
+    setEpisodesLoading(true);
+    setEpisodesError(null);
+    const cached = await callTauri<Episode[]>('get_cached_episodes', {
+      contentId: item.data.id,
+      providerId: src.provider_id,
+      seasonNumber: src.season_number ?? 1,
+    });
+    if (cached && cached.length > 0) {
+      setEpisodes(cached);
+      setEpisodesLoading(false);
+      return;
+    }
+    const fetched = await callTauri<Episode[]>('fetch_episodes', {
+      contentId: item.data.id,
+      providerId: src.provider_id,
+      seasonNumber: src.season_number ?? 1,
+      seasonUrl: src.page_url,
+    });
+    if (fetched && fetched.length > 0) {
+      setEpisodes(fetched);
+    } else {
+      setEpisodesError('No episodes found — try refreshing or check the site.');
+    }
+    setEpisodesLoading(false);
+  };
+
+  const handleSelectSeason = (src: ContentSource) => {
+    setSelectedSeason(src);
+    setSeasonDropdownOpen(false);
+    setEpisodes([]);
+    loadEpisodes(src);
+  };
+
+  const handleRefreshEpisodes = async () => {
+    if (!selectedSeason || !isContent) return;
+    setEpisodesLoading(true);
+    setEpisodesError(null);
+    const fetched = await callTauri<Episode[]>('fetch_episodes', {
+      contentId: item.data.id,
+      providerId: selectedSeason.provider_id,
+      seasonNumber: selectedSeason.season_number ?? 1,
+      seasonUrl: selectedSeason.page_url,
+    });
+    if (fetched && fetched.length > 0) {
+      setEpisodes(fetched);
+    } else {
+      setEpisodesError('No episodes found — site structure may have changed.');
+    }
+    setEpisodesLoading(false);
   };
 
   const handlePlayUrl = async (url: string, label: string, providerId: string | null) => {
@@ -255,17 +327,11 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
                         <div className="um-dropdown-empty">No seasons available</div>
                       ) : (
                         item.sources.map((src) => {
-                          const label = src.season_number != null
-                            ? `${item.data.title} S${src.season_number}`
-                            : item.data.title;
                           return (
                             <button
                               key={`${src.provider_id}-${src.season_number}`}
                               className="um-dropdown-item"
-                              onClick={() => {
-                                setSeasonDropdownOpen(false);
-                                handlePlayUrl(src.page_url, label, src.provider_id);
-                              }}
+                              onClick={() => handleSelectSeason(src)}
                             >
                               <span>{src.season_number != null ? `Season ${src.season_number}` : 'Full Series'}</span>
                               <span className="um-dropdown-sub">{src.provider_name}</span>
@@ -339,6 +405,53 @@ export const UniversalModal: React.FC<UniversalModalProps> = ({
           {isContent && item.data.synopsis && (
             <p className="um-synopsis">{item.data.synopsis}</p>
           )}
+
+          {isContent && isTV && selectedSeason && (
+            <div className="um-episodes-section">
+              <div className="um-episodes-header">
+                <span>
+                  Season {selectedSeason.season_number ?? 1}
+                  {' · '}{selectedSeason.provider_name}
+                </span>
+                <button className="um-episodes-refresh" onClick={handleRefreshEpisodes}>
+                  <RefreshCw size={12} />
+                  Refresh
+                </button>
+              </div>
+
+              {episodesLoading && (
+                <div className="um-episodes-loading">Loading episodes…</div>
+              )}
+
+              {episodesError && !episodesLoading && (
+                <div className="um-episodes-error">{episodesError}</div>
+              )}
+
+              {!episodesLoading && episodes.length > 0 && (
+                <div className="um-episode-grid">
+                  {episodes.map((ep) => (
+                    <button
+                      key={ep.id}
+                      className="um-episode-btn"
+                      onClick={() =>
+                        handlePlayUrl(
+                          ep.page_url,
+                          `${item.data.title} S${ep.season_number}E${ep.episode_number}`,
+                          selectedSeason.provider_id,
+                        )
+                      }
+                    >
+                      <span className="um-episode-num">E{ep.episode_number}</span>
+                      {ep.title && (
+                        <span className="um-episode-title">{ep.title}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {isVideo && (
             <>
               <p className="um-url">

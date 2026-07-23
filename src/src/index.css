@@ -1524,3 +1524,93 @@ body {
   display: flex;
   justify-content: flex-end;
 }
+
+/* ── Episode List ─────────────────────────────────────────── */
+.um-episodes-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.um-episodes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.um-episodes-refresh {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-gray);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.um-episodes-refresh:hover {
+  color: var(--netflix-red);
+}
+
+.um-episode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+}
+
+.um-episode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  color: inherit;
+  text-align: center;
+  min-width: 0;
+}
+
+.um-episode-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--netflix-red);
+}
+
+.um-episode-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--netflix-red);
+}
+
+.um-episode-title {
+  font-size: 10px;
+  color: var(--text-gray);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.um-episodes-loading,
+.um-episodes-error {
+  font-size: 12px;
+  color: var(--text-gray);
+  padding: 8px 0;
+}
+
+.um-episodes-error {
+  color: #e53e3e;
+}
