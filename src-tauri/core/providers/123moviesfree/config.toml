@@ -1,0 +1,11 @@
+[provider]
+id       = "123moviesfree"
+name     = "123MoviesFree"
+base_url = "https://ww8.123moviesfree.net"
+enabled  = true
+
+[webview]
+mask_left   = 0
+mask_right  = 0
+mask_top    = 95
+mask_bottom = 35

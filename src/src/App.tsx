@@ -24,6 +24,7 @@ interface ContentDetail {
 import { ProviderList } from './components/ProviderList';
 import { GenreCatalog } from './components/GenreCatalog';
 import { GenreGrid } from './components/GenreGrid';
+import { SettingsModal } from './components/SettingsModal';
 
 export interface Video {
   id: string;
@@ -126,6 +127,7 @@ export default function App() {
 
   const [isAddVideoOpen, setIsAddVideoOpen] = useState(false);
   const [isAddPlaylistOpen, setIsAddPlaylistOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [modalItem, setModalItem] = useState<ModalItem | null>(null);
 
   // Catalog state with pagination
@@ -511,6 +513,7 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         onOpenAddVideo={() => setIsAddVideoOpen(true)}
         onOpenAddPlaylist={() => setIsAddPlaylistOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
       />
@@ -700,6 +703,7 @@ export default function App() {
       />
       <AddVideoModal isOpen={isAddVideoOpen} onClose={() => setIsAddVideoOpen(false)} onAddVideo={handleAddVideo} />
       <AddPlaylistModal isOpen={isAddPlaylistOpen} onClose={() => setIsAddPlaylistOpen(false)} onAddPlaylist={handleAddPlaylist} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }

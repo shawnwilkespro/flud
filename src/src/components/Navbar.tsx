@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, FolderPlus } from 'lucide-react';
+import { Search, Plus, FolderPlus, Settings } from 'lucide-react';
 
 interface NavbarProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   onOpenAddVideo: () => void;
   onOpenAddPlaylist: () => void;
+  onOpenSettings: () => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
 }
@@ -15,6 +16,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setSearchQuery,
   onOpenAddVideo,
   onOpenAddPlaylist,
+  onOpenSettings,
   activeTab,
   setActiveTab,
 }) => {
@@ -114,6 +116,10 @@ export const Navbar: React.FC<NavbarProps> = ({
         <button className="btn-netflix-primary" onClick={onOpenAddVideo} title="Add New Video Bookmark">
           <Plus size={18} />
           <span className="btn-text">Add Video</span>
+        </button>
+
+        <button className="btn-netflix-secondary" onClick={onOpenSettings} title="Settings" style={{ padding: '0.5rem' }}>
+          <Settings size={18} />
         </button>
       </div>
     </nav>

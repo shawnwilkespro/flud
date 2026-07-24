@@ -33,6 +33,13 @@ pub struct Provider {
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
+pub struct ProviderCategorySetting {
+    pub provider_id: String,
+    pub category: String,  // "movie" | "tv_show"
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
 pub struct Content {
     pub id: String,
     pub tmdb_id: Option<i64>,
@@ -208,6 +215,25 @@ pub async fn init_db() -> sqlx::Result<SqlitePool> {
     .execute(&pool)
     .await?;
 
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS provider_category_settings (
+            provider_id TEXT NOT NULL REFERENCES providers(id),
+            category    TEXT NOT NULL,
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (provider_id, category)
+        );
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_provider_content_content_id ON provider_content(content_id);"
+    )
+    .execute(&pool)
+    .await?;
+
     Ok(pool)
 }
 
@@ -373,7 +399,7 @@ pub async fn db_list_content(
         (Some(q), Some(mt)) => {
             let like = format!("%{}%", q);
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE title LIKE ?1 AND media_type = ?2 ORDER BY title ASC LIMIT ?3 OFFSET ?4"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE title LIKE ?1 AND media_type = ?2 AND EXISTS (SELECT 1 FROM provider_content pc LEFT JOIN provider_category_settings pcs ON pcs.provider_id = pc.provider_id AND pcs.category = content.media_type WHERE pc.content_id = content.id AND (pcs.enabled IS NULL OR pcs.enabled = 1)) ORDER BY title ASC LIMIT ?3 OFFSET ?4"
             )
             .bind(like)
             .bind(mt)
@@ -385,7 +411,7 @@ pub async fn db_list_content(
         (Some(q), None) => {
             let like = format!("%{}%", q);
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE title LIKE ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE title LIKE ?1 AND EXISTS (SELECT 1 FROM provider_content pc LEFT JOIN provider_category_settings pcs ON pcs.provider_id = pc.provider_id AND pcs.category = content.media_type WHERE pc.content_id = content.id AND (pcs.enabled IS NULL OR pcs.enabled = 1)) ORDER BY title ASC LIMIT ?2 OFFSET ?3"
             )
             .bind(like)
             .bind(lim)
@@ -395,7 +421,7 @@ pub async fn db_list_content(
         }
         (None, Some(mt)) => {
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE media_type = ?1 ORDER BY title ASC LIMIT ?2 OFFSET ?3"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE media_type = ?1 AND EXISTS (SELECT 1 FROM provider_content pc LEFT JOIN provider_category_settings pcs ON pcs.provider_id = pc.provider_id AND pcs.category = content.media_type WHERE pc.content_id = content.id AND (pcs.enabled IS NULL OR pcs.enabled = 1)) ORDER BY title ASC LIMIT ?2 OFFSET ?3"
             )
             .bind(mt)
             .bind(lim)
@@ -405,7 +431,7 @@ pub async fn db_list_content(
         }
         (None, None) => {
             sqlx::query_as::<_, Content>(
-                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content ORDER BY title ASC LIMIT ?1 OFFSET ?2"
+                "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE EXISTS (SELECT 1 FROM provider_content pc LEFT JOIN provider_category_settings pcs ON pcs.provider_id = pc.provider_id AND pcs.category = content.media_type WHERE pc.content_id = content.id AND (pcs.enabled IS NULL OR pcs.enabled = 1)) ORDER BY title ASC LIMIT ?1 OFFSET ?2"
             )
             .bind(lim)
             .bind(off)
@@ -456,7 +482,7 @@ pub async fn db_get_content_detail(
 
 pub async fn db_list_recent_content(pool: &SqlitePool, limit: i64) -> sqlx::Result<Vec<Content>> {
     sqlx::query_as::<_, Content>(
-        "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE poster_url IS NOT NULL ORDER BY release_date DESC NULLS LAST, year DESC NULLS LAST LIMIT ?1"
+        "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE poster_url IS NOT NULL AND EXISTS (SELECT 1 FROM provider_content pc LEFT JOIN provider_category_settings pcs ON pcs.provider_id = pc.provider_id AND pcs.category = content.media_type WHERE pc.content_id = content.id AND (pcs.enabled IS NULL OR pcs.enabled = 1)) ORDER BY release_date DESC NULLS LAST, year DESC NULLS LAST LIMIT ?1"
     )
     .bind(limit)
     .fetch_all(pool)
@@ -473,7 +499,7 @@ pub async fn db_list_content_by_genre(
     let like = format!("%\"{}\"%" , genre);
     match media_type {
         Some(mt) => sqlx::query_as::<_, Content>(
-            "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE genres LIKE ?1 AND media_type = ?2 AND poster_url IS NOT NULL ORDER BY rating DESC NULLS LAST, release_date DESC NULLS LAST LIMIT ?3 OFFSET ?4"
+            "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE genres LIKE ?1 AND media_type = ?2 AND poster_url IS NOT NULL AND EXISTS (SELECT 1 FROM provider_content pc LEFT JOIN provider_category_settings pcs ON pcs.provider_id = pc.provider_id AND pcs.category = content.media_type WHERE pc.content_id = content.id AND (pcs.enabled IS NULL OR pcs.enabled = 1)) ORDER BY rating DESC NULLS LAST, release_date DESC NULLS LAST LIMIT ?3 OFFSET ?4"
         )
         .bind(like)
         .bind(mt)
@@ -482,7 +508,7 @@ pub async fn db_list_content_by_genre(
         .fetch_all(pool)
         .await,
         None => sqlx::query_as::<_, Content>(
-            "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE genres LIKE ?1 AND poster_url IS NOT NULL ORDER BY rating DESC NULLS LAST, release_date DESC NULLS LAST LIMIT ?2 OFFSET ?3"
+            "SELECT id, tmdb_id, title, media_type, synopsis, poster_url, cover_url_override, year, genres, rating, release_date FROM content WHERE genres LIKE ?1 AND poster_url IS NOT NULL AND EXISTS (SELECT 1 FROM provider_content pc LEFT JOIN provider_category_settings pcs ON pcs.provider_id = pc.provider_id AND pcs.category = content.media_type WHERE pc.content_id = content.id AND (pcs.enabled IS NULL OR pcs.enabled = 1)) ORDER BY rating DESC NULLS LAST, release_date DESC NULLS LAST LIMIT ?2 OFFSET ?3"
         )
         .bind(like)
         .bind(limit)
@@ -607,4 +633,35 @@ pub async fn db_get_episodes(
     .bind(season_number)
     .fetch_all(pool)
     .await
+}
+
+pub async fn db_list_provider_category_settings(
+    pool: &SqlitePool,
+) -> sqlx::Result<Vec<ProviderCategorySetting>> {
+    sqlx::query_as::<_, ProviderCategorySetting>(
+        "SELECT provider_id, category, enabled FROM provider_category_settings ORDER BY provider_id, category"
+    )
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn db_set_provider_category(
+    pool: &SqlitePool,
+    provider_id: &str,
+    category: &str,
+    enabled: bool,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO provider_category_settings (provider_id, category, enabled)
+        VALUES (?1, ?2, ?3)
+        ON CONFLICT(provider_id, category) DO UPDATE SET enabled = excluded.enabled
+        "#,
+    )
+    .bind(provider_id)
+    .bind(category)
+    .bind(enabled as i32)
+    .execute(pool)
+    .await?;
+    Ok(())
 }

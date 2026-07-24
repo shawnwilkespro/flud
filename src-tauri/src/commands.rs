@@ -1,7 +1,7 @@
 use tauri::Manager;
 use crate::AppState;
 use crate::db::{
-    Video, Playlist,
+    Video, Playlist, ProviderCategorySetting,
     db_add_video,
     db_list_videos,
     db_get_video,
@@ -18,6 +18,8 @@ use crate::db::{
     db_get_content_playlist,
     db_upsert_episodes,
     db_get_episodes,
+    db_list_provider_category_settings,
+    db_set_provider_category,
 };
 use crate::db;
 use scraper::{Html, Selector};
@@ -753,4 +755,25 @@ pub async fn get_cached_episodes(
     db_get_episodes(&state.db, &content_id, &provider_id, season_number)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_provider_category_settings(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<ProviderCategorySetting>, String> {
+    db_list_provider_category_settings(&state.db)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_provider_category(
+    state: tauri::State<'_, AppState>,
+    provider_id: String,
+    category: String,
+    enabled: bool,
+) -> Result<(), String> {
+    db_set_provider_category(&state.db, &provider_id, &category, enabled)
+        .await
+        .map_err(|e| format!("Set provider category failed: {}", e))
 }

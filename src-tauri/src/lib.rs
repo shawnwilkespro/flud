@@ -55,6 +55,8 @@ pub fn run() {
             commands::get_content_playlist,
             commands::fetch_episodes,
             commands::get_cached_episodes,
+            commands::list_provider_category_settings,
+            commands::set_provider_category,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
